@@ -1,0 +1,32 @@
+{
+  "selection": {
+    "variable_development": "classifier_ros1__tuned__dca__variable",
+    "variable_retrospective": "classifier_ros1__natural__probability_high__variable",
+    "equal_development": "classifier_ros1__natural__probability_3__equal",
+    "equal_retrospective": "classifier_ros1__tuned__class_2_0__equal"
+  },
+  "combinations": 106,
+  "rules": {
+    "dca": "100 every month",
+    "class_1_0": "100 if class 1; 0 if class 0",
+    "class_2_0": "200 if class 1; 0 if class 0",
+    "class_3_0": "300 if class 1; 0 if class 0",
+    "class_2_1": "200 if class 1; 100 if class 0",
+    "class_2_half": "200 if class 1; 50 if class 0",
+    "class_1_half": "100 if class 1; 50 if class 0",
+    "probability_1": "100 * P(class 1)",
+    "probability_2": "200 * P(class 1)",
+    "probability_3": "300 * P(class 1)",
+    "probability_floor": "50 + 100 * P(class 1)",
+    "probability_squared": "200 * P(class 1)^2",
+    "probability_tiers": "0 / 50 / 100 / 200 at P1 <0.4 / <0.6 / <0.8 / >=0.8",
+    "probability_high": "200 if P(class 1) >= 0.6; otherwise 0"
+  },
+  "development": "1982-1999; valued 2004-12-31",
+  "evaluation": "2005-2020; valued 2026-01-02",
+  "source_sha256": {
+    "docs/experiments/signal-strategies/predictions.csv": "c93623aabcd8a63212fde30e08c2689e6a2abdc233804cde5d5e6ff4962e401a",
+    "models/data/sp500.csv": "5a473f7c136f30d7d4571119998184fd2616fc081abd2a22de09d775dd51d7bc",
+    "scripts/compare_contribution_rules.py": "b28bc2d02970a8355119c745bbb5014c11c9d3679559f6e7823cd33171088e4e"
+  }
+}

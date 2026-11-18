@@ -313,6 +313,8 @@ The follow-up keeps the same 36-month target and five features. It compares two 
 
 The [results and policy table](docs/experiments/signal-strategies/results.md), [all combinations](docs/experiments/signal-strategies/all_combinations.csv) and [methodology](docs/experiments/signal-strategies/methodology.md) include XIRR, flow-adjusted drawdown, predictive metrics, costs and cohort checks. Reproduce with `python -m scripts.compare_signal_strategies`.
 
+**Purchase sizing by class/probability.** A further [106 comparisons](docs/experiments/contribution-rules/results.md) test 1x/2x/3x class-based purchases, proportional probabilities and confidence bands. With the same 100/month saving budget, buying up to 200 on class 1 and zero on class 0, funded only from accumulated cash, reaches **348.02% ROI** versus DCA's 332.01%. It remains below the 36-month-delay reference's 351.58% and loses to DCA in development. With variable contributions, multiplying every purchase by 2 doubles capital and wealth but leaves ROI unchanged. A probability-threshold rule reaches 356.84% on its actual variable contributions, but only 247.83% under equal monthly funding with unused cash included. These results do not justify replacing the default model or promoting a new investment policy. Reproduce with `python -m scripts.compare_contribution_rules`.
+
 ---
 
 ## Data Engineering Proof of Concept (PoC)
