@@ -269,6 +269,8 @@ ROI uses equal monthly contributions, purchases at the next trading session's cl
 
 **Remaining limitations.** The panel combines archived and revised macroeconomic values, so it is not fully point-in-time. The 34 negative months belong to one historical episode (2005–2008); the economic advantage is concentrated there. Oversampled probabilities are not calibrated. The inherited feature definitions also need a separate audit, notably the earnings-yield/bond-yield unit mismatch in ERP. Correcting those definitions requires rerunning the comparison. Choosing the horizon after reviewing several targets is still retrospective; a new untouched period is needed before treating this as a confirmed investment strategy.
 
+**Strategy follow-up.** The later [classification/regression strategy study](docs/experiments/signal-strategies/results.md) does not support replacing this research reference with regression, or replacing DCA with a validated trading system. The best development-selected regression policy underperformed DCA in evaluation; the largest regression evaluation ROI came from a retrospectively chosen policy with just two alerts.
+
 The [saved reference model](models/artifacts/selected_lightgbm/model/metadata.json), [verified results](models/artifacts/selected_lightgbm/verification.json), [full grid tables](docs/experiments/multihorizon-grid/results.md), [methodology](docs/experiments/multihorizon-grid/methodology.md) and [earlier comparisons](docs/experiments/model-comparisons.md) preserve the supporting detail without expanding this README.
 
 ### Explainable AI (XAI) via Tree SHAP
@@ -295,6 +297,21 @@ The curves mark shares and uninvested cash to market through 2 January 2026. ROI
 ![LightGBM and DCA cumulative ROI with equal contributions](docs/images/selected_lightgbm/investment_strategies.png)
 
 *LightGBM ends at 351.58% ROI versus 332.01% for DCA, a difference of 19.57 percentage points. The export script checks the terminal values against the verified study results. The legacy pipeline's variable-contribution simulations remain available separately and use different accounting.*
+
+### Classification versus regression: alternative strategies
+
+The follow-up keeps the same 36-month target and five features. It compares two LightGBM classifiers and 24 regressors (L1/L2 losses, with/without negative-return oversampling), two alert rules and 13 policies: delayed/partial purchases, waiting for a favorable signal, holding cash and rebalancing the entire portfolio. Including DCA, the table contains **677 comparisons**. Selection uses development signals from 1982–1999, valued by the end of 2004; evaluation signals remain 2005–2020, valued on 2 January 2026.
+
+| Policy | Development advantage vs DCA | Evaluation ROI | Evaluation advantage vs DCA |
+| --- | ---: | ---: | ---: |
+| DCA | 0.00 pp | 332.01% | 0.00 pp |
+| Existing classifier, delay flagged purchases 36 months | -30.78 pp | 351.58% | +19.57 pp |
+| Regression selected on development, wait for favorable signal up to 36 months | +1.12 pp | 329.63% | -2.38 pp |
+| Regression retrospective maximum, switch entire portfolio equity/cash | -35.41 pp | 360.78% | +28.77 pp |
+
+**Decision:** retain the classifier as the research reference and DCA as the operational baseline in this comparison. Regression's 360.78% is a retrospective maximum, not a validated improvement: it failed in development and its evaluation advantage comes from two alerts in March–April 2012. The existing classifier's economic improvement is also concentrated in 2005–2008; starting contributions in 2009 gives -4.38 pp versus DCA. No change to the default model is justified by this strategy search alone.
+
+The [results and policy table](docs/experiments/signal-strategies/results.md), [all combinations](docs/experiments/signal-strategies/all_combinations.csv) and [methodology](docs/experiments/signal-strategies/methodology.md) include XIRR, flow-adjusted drawdown, predictive metrics, costs and cohort checks. Reproduce with `python -m scripts.compare_signal_strategies`.
 
 ---
 
