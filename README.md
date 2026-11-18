@@ -1,22 +1,22 @@
-# Financial time series forecasting with XGBoost
+# Financial time series forecasting with LightGBM
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white)
 [![CI](https://github.com/Arqaen/data-pipeline-management/actions/workflows/ci.yml/badge.svg)](https://github.com/Arqaen/data-pipeline-management/actions/workflows/ci.yml)
-![Machine Learning](https://img.shields.io/badge/ML-XGBoost%20%7C%20SHAP-189AB4?logo=scikitlearn&logoColor=white)
+![Machine Learning](https://img.shields.io/badge/ML-LightGBM%20%7C%20SHAP-189AB4?logo=scikitlearn&logoColor=white)
 ![Validation](https://img.shields.io/badge/validation-Purged%20Walk--Forward-success)
 ![Data Engineering](https://img.shields.io/badge/data%20engineering-Kafka%20%7C%20Spark%20%7C%20Airflow-orange)
 ![Storage](https://img.shields.io/badge/lakehouse-MinIO%20(Parquet)-C72E49?logo=minio&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A rigorous, time-aware quantitative machine learning framework designed to forecast long-term macroeconomic regimes and directional trends for the **S&P 500 index**. The platform integrates multi-source macroeconomic and valuation signals, prevents lookahead bias via publication release lags, enforces purged walk-forward temporal cross-validation, and provides granular model explainability through SHAP.
+A time-aware quantitative machine learning framework for forecasting long-term macroeconomic regimes and directional trends for the **S&P 500 index**. The platform combines macroeconomic and valuation signals, applies publication lags, evaluates models with purged walk-forward splits, and explains predictions with SHAP. **The selected default is LightGBM at 36 months with the original five variables and 1:1 oversampling**.
 
-**MLflow experiment tracking is implemented** to compare pipeline executions and preserve their parameters, validation metrics, predictions, diagnostic figures and trained XGBoost models.
+**MLflow experiment tracking is implemented** to compare pipeline executions and preserve their parameters, validation metrics, predictions, diagnostic figures and trained LightGBM and historical XGBoost models.
 
 Additionally, the repository features an exploratory **Data Engineering Proof of Concept (PoC)** demonstrating containerized, distributed streaming ingestion and lakehouse storage (Kafka, Spark, Airflow, MinIO).
 
-![Class 0 walk-forward ROC and precision-recall curves for shallow-weight1-f1_1](docs/images/shallow_weight1_f1_1/roc_pr_class0.png)
+![LightGBM class-0 out-of-sample ROC and precision-recall curves](docs/images/selected_lightgbm/roc_pr_class0.png)
 
-*Selected default setup: `shallow-weight1-f1_1`, evaluated on 492 walk-forward monthly predictions from January 1982 through December 2022 at a 36-month horizon. Class 0 ROC-AUC is 0.779 and average precision (AP₀) is 0.307, compared with a negative-class prevalence of 0.144. The [figure gallery and source ledger](docs/images/README.md) distinguish these MLflow results from the original thesis figures.*
+*Selected LightGBM, 36-month horizon and 1:1 oversampling: 192 out-of-sample monthly predictions from 2005–2020. Class-0 ROC-AUC is 0.788 and AP is 0.747, against a prevalence of 0.177. The [figure gallery](docs/images/README.md) includes the classification timeline, confusion matrix and source fingerprints.*
 
 ---
 
@@ -25,13 +25,14 @@ Additionally, the repository features an exploratory **Data Engineering Proof of
 - [Core Analytical Focus: Financial Machine Learning](#core-analytical-focus-financial-machine-learning)
   - [Quantitative Problem Formulation](#quantitative-problem-formulation)
   - [Macroeconomic & Market Data Engine](#macroeconomic--market-data-engine)
-  - [Zero Lookahead Bias & Publication Release Lags](#zero-lookahead-bias--publication-release-lags)
+  - [Publication lags and data revisions](#publication-lags-and-data-revisions)
   - [Feature Engineering Taxonomy](#feature-engineering-taxonomy)
 - [Modeling & Validation Architecture](#modeling--validation-architecture)
   - [Target Variable Construction](#target-variable-construction)
   - [Purged Walk-Forward Cross-Validation & Temporal Embargo](#purged-walk-forward-cross-validation--temporal-embargo)
-  - [XGBoost Optimization & Dynamic Threshold Tuning](#xgboost-optimization--dynamic-threshold-tuning)
+  - [Model Configuration & Dynamic Threshold Tuning](#model-configuration--dynamic-threshold-tuning)
   - [Probabilistic Calibration & Evaluation Metrics](#probabilistic-calibration--evaluation-metrics)
+  - [Selected model and experiments](#selected-model-and-experiments)
   - [Explainable AI (XAI) via Tree SHAP](#explainable-ai-xai-via-tree-shap)
 - [Quantitative Strategy Simulation & Benchmarking](#quantitative-strategy-simulation--benchmarking)
 - [Data Engineering Proof of Concept (PoC)](#data-engineering-proof-of-concept-poc)
@@ -68,7 +69,7 @@ flowchart TD
     subgraph Modeling["3. Time-Aware Machine Learning Engine"]
         E & F & G --> H[Forward Target Labelling: Multi-Month Horizon]
         H --> I[Purged Walk-Forward CV: 20y Train / 1y Test / Embargo]
-        I --> J[XGBoost Classifier: Hist Tree Method]
+        I --> J[LightGBM: 3 Leaves / 100 Trees / Oversampling]
         J --> K[Dynamic F1 Threshold Optimization]
     end
 
@@ -108,15 +109,15 @@ The ML engine integrates 28+ monthly and quarterly macroeconomic, monetary, cred
 
 ---
 
-### Zero Lookahead Bias & Publication Release Lags
+### Publication lags and data revisions
 
 A critical failure mode in academic and financial machine learning is **lookahead bias** (*data leakage*): training models with economic data timestamped on reference dates rather than when the data was actually published to market participants.
 
-To guarantee zero lookahead bias, this framework enforces strict **publication release lags** before feature calculation:
+The pipeline applies publication lags before computing features. A lag accounts for reporting delays. A historical release archive is also needed to recover the values available before later revisions.
 
 - **Quarterly GDP (`GDPC1`):** Shifted by $+3$ months (quarterly reporting and revision delay).
 - **Monthly Indicators (`UNRATE`, `PERMIT`, `M2SL`, `HOUST`, `TOTALSA`, `WALCL`, `CORESTICKM159SFRBATL`):** Shifted by $+1$ month.
-- **Historical Coverage Filtering:** Features are verified against a minimum non-null history ratio (`MIN_HISTORY_RATIO = 0.6`) to avoid survivorship bias and artificial imputation artifacts.
+- **Historical coverage.** The original pipeline filters features by coverage across the modeling dataset. The [model comparison](#training-and-evaluation) checks coverage separately before each test block.
 
 ---
 
@@ -202,17 +203,21 @@ Final:  [================ Full Historical Training ================][-- Gap --][
 1. **Expanding Window Training:** Minimum initial training history of 240 months (20 years) to capture multiple macroeconomic cycles.
 2. **Purging & Embargo:** Observations within the overlapping $h$-month forward window are purged before the evaluation fold.
 3. **Internal Temporal Validation:** Each training split isolates its last 20% chronologically for:
-   - Early stopping regularization (`early_stopping_rounds = 100`).
+   - An early-stopping block for legacy XGBoost (`early_stopping_rounds = 100`); the selected LightGBM uses 100 fixed trees.
    - Out-of-fold optimal classification threshold calibration.
 4. **10-Year Out-of-Sample Final Rollout:** An isolated 120-month final testing block separated by a 36-month embargo gap evaluates real-world regime stability and out-of-sample degradation.
 
 ---
 
-### XGBoost Optimization & Dynamic Threshold Tuning
+![LightGBM walk-forward predictions, S&P 500 price and probabilities, 2005–2020](docs/images/selected_lightgbm/walk_forward_classification.png)
 
-- **Base Estimator:** `XGBClassifier` with histogram-based tree splitting (`tree_method = "hist"`), log-loss objective (`binary:logistic`), and tree depth limits to prevent overfitting.
-- The default manual model uses depth 2, equal training weights and a validation threshold chosen by F1 for class 1. To reproduce the comparison of negative alerts across depth, class weights and threshold objectives, run `python -m scripts.compare_negative_policies`. The experiment logs development and evaluation metrics separately in MLflow.
-- **Regularization:** L1 penalty (`reg_alpha`), L2 penalty (`reg_lambda`), conservative learning rates ($\eta \in [0.03, 0.07]$), and sub-sampling ratios (`subsample = 0.9`, `colsample_bytree = 0.8`).
+*Annual walk-forward predictions for 192 months outside each fitting window. The upper panel shows predicted classes (green: correct; red: incorrect) and the S&P 500 closing price on a logarithmic scale. The lower panel shows uncalibrated P(class 1). Decisions use the saved validation thresholds, not a fixed 0.5 cutoff. These are the selected study's 2005–2020 predictions, not the separate 10-year rollout.*
+
+### Model Configuration & Dynamic Threshold Tuning
+
+- **Base estimator:** `LGBMClassifier`, binary logistic loss, 100 trees, three leaves and learning rate 0.025. The shared estimator factory is used by walk-forward, rollout and final fitting.
+- **Sampling:** Class-0 random oversampling to 1:1 within fitting data, seed 42, without additional class weights. Use `--no-oversampling` for the control or `--model xgboost` for the legacy estimator.
+- **Training:** The selected LightGBM uses a fixed number of trees without early stopping. XGBoost retains its historical early-stopping and random-search support.
 - **Decision threshold:** Each walk-forward fold and the final rollout select a cutoff on the estimated probability of class 1. The search tests 50 cutoffs from 0.10 to 0.90 on historical validation data and maximizes F1 for the class selected by `--threshold-class`. A validation block with one class uses 0.50.
 
 ---
@@ -241,64 +246,55 @@ Evaluation Metrics Suite
     └── Strategy Exposure & Turnover Rate
 ```
 
-#### Selected setup: `shallow-weight1-f1_1`
+### Selected model and experiments
 
-This run uses the five default features, depth-2 XGBoost trees, equal class weights, and a probability threshold selected on historical validation data to maximize F1 for class 1. The complete-case modeling data starts in 1962; after the initial training period, 41 annual walk-forward folds evaluate January 1982 through December 2022.
+**The project default is LightGBM, a 36-month target, the original five features and random oversampling of class 0 to 1:1.** It uses binary logistic loss, 100 trees, three leaves, learning rate 0.025, minimum 15 samples per leaf and L2 regularization 1.0. The seed is 42. Oversampling is applied only after the temporal split, within the fitting block; validation and test distributions remain unchanged. The default threshold maximizes class-1 F1 on historical validation.
 
-![Walk-forward class predictions, S&P 500 prices and upward probabilities for shallow-weight1-f1_1](docs/images/shallow_weight1_f1_1/classification.png)
+The features are `equity_risk_premium`, `credit_spread`, `unemp_change_12m`, `m2_yoy` and `permit_yoy`. Their definitions are frozen to those used in the study.
 
-*The upper panel shows the predicted class alongside the S&P 500 closing price; green points mark correct predictions and red points mark errors. The lower panel shows the probability of a positive 36-month return. These are pooled walk-forward predictions, not in-sample fitted results.*
+**What was tested.** We compared XGBoost, regularized logistic regression, Random Forest, Extra Trees, HistGradientBoosting and LightGBM, plus validation-selected probability ensembles. The grid covered 6-, 12-, 24-, 36-, 48- and 60-month targets, with and without oversampling, using the original variables, a broad feature pool and up to eight variables selected within each fitting window. There were 1,476 individual configurations and 72 ensemble/selector results. Hyperparameters were selected by development AP₀ (1982–1999), then evaluated on the common 2005–2020 test calendar with temporal purging and mature labels.
 
-![Walk-forward confusion matrix for shallow-weight1-f1_1](docs/images/shallow_weight1_f1_1/confusion_matrix.png)
+| Selected LightGBM result, 2005–2020 | Value |
+| --- | ---: |
+| Class-0 AP / ROC-AUC | 0.747 / 0.788 |
+| Class-0 precision / recall / F1 | 0.697 / 0.676 / 0.687 |
+| Unfavourable months detected / total | 23 / 34 |
+| False alarms | 10 |
+| Cumulative strategy ROI / DCA ROI | 351.58% / 332.01% |
+| Difference versus DCA | +19.57 percentage points |
 
-| Class 0 detection metric | Pooled walk-forward result |
-| :--- | ---: |
-| Evaluated months | 492 |
-| Actual negative months | 71 (14.4%) |
-| Detected negatives | 32 of 71 |
-| Missed negatives | 39 |
-| False alarms for class 0 (actual 1, predicted 0) | 34 |
-| Recall₀ | 45.1% |
-| Precision₀ | 48.5% |
-| F1₀ | 0.467 |
-| AP₀ | 0.307 |
+ROI uses equal monthly contributions, purchases at the next trading session's close, and a 36-month delay for contributions flagged as risky. Deferred cash earns 0%; all holdings are valued on 2 January 2026. Dividends, fees and taxes are excluded. This is cumulative ROI, not an annual return. The older pipeline strategy charts use different contribution rules and are not directly comparable.
 
-*Rows are actual classes and columns are predictions. TN/FP/FN/TP use class 1 as the positive label, so the 34 false alarms for class 0 appear in the FN cell. These pooled metrics differ from averages across individual folds. MLflow experiment: `class-zero-policies-h36`; run ID: `b33cfa49d6a54d2e9bc40d3900897558`.*
+**Why this model.** It was the development-selected winner for the 36-month target, combines strong negative-month ranking with an economic improvement, and uses only five variables and shallow trees. For these same LightGBM hyperparameters, oversampling raised AP₀ from 0.294 to 0.747. HistGradientBoosting without oversampling achieved the highest retrospective ROI (354.87%), but choosing it on that basis would select on test results. LightGBM is the chosen research reference, rather than the winner of every metric.
 
-> [!WARNING]
-> **Known Limitations:**
-> Monthly 36-month forward labels overlap, so the 492 evaluated months are not independent observations. Reported metrics are point estimates without confidence intervals and should be read as directional, not conclusive. Feature selection was informed by full-sample analysis, so walk-forward results are optimistic.
+**Remaining limitations.** The panel combines archived and revised macroeconomic values, so it is not fully point-in-time. The 34 negative months belong to one historical episode (2005–2008); the economic advantage is concentrated there. Oversampled probabilities are not calibrated. The inherited feature definitions also need a separate audit, notably the earnings-yield/bond-yield unit mismatch in ERP. Correcting those definitions requires rerunning the comparison. Choosing the horizon after reviewing several targets is still retrospective; a new untouched period is needed before treating this as a confirmed investment strategy.
 
----
+The [saved reference model](models/artifacts/selected_lightgbm/model/metadata.json), [verified results](models/artifacts/selected_lightgbm/verification.json), [full grid tables](docs/experiments/multihorizon-grid/results.md), [methodology](docs/experiments/multihorizon-grid/methodology.md) and [earlier comparisons](docs/experiments/model-comparisons.md) preserve the supporting detail without expanding this README.
 
 ### Explainable AI (XAI) via Tree SHAP
 
 To prevent the model from operating as a black box, the framework uses `shap.TreeExplainer` for end-to-end interpretability:
 
-- **Global Feature Importance:** Mean absolute SHAP values ($E[|\phi_i|]$) revealing dominant macroeconomic drivers over 70+ years.
+- **Global Feature Importance:** Mean absolute SHAP values ($E[|\phi_i|]$) revealing dominant macroeconomic drivers over the 1962–2020 reference training period.
 - **SHAP Beeswarm Distributions:** Directional impact of features (e.g., how high credit spreads or contracting M2 decrease positive return probabilities).
 - **Non-Linear Interactions:** Automatic pair-wise interaction analysis (e.g., Equity Risk Premium conditioned on real interest rates).
-- **Local Waterfall Decompositions:** Single-observation breakdown for the most recent market regime, visualizing the contribution of each live economic variable to the latest prediction.
+- **Local Waterfall Decompositions:** Single-observation breakdown for the last labeled training row. This is an in-sample explanation, not a live forecast.
 
-![SHAP beeswarm showing the direction and magnitude of macroeconomic feature contributions](docs/images/shap_summary_cls.png)
+![LightGBM SHAP beeswarm for the saved reference model](docs/images/selected_lightgbm/shap_summary_cls.png)
 
-*Global feature attribution from the thesis (Figure 5.11, p. 54). Colors represent feature values; horizontal position represents contribution to the model output. This explains model behavior rather than establishing causality.*
+*Exact Tree SHAP contributions from the saved LightGBM model, fitted on 1962–2020. Colors represent feature values; horizontal position represents contributions to class-1 log-odds. These are in-sample explanations, not an independent evaluation or evidence of causality.*
 
 ---
 
 ## Quantitative Strategy Simulation & Benchmarking
 
-The ROI chart compares three ways to buy shares at the recorded monthly closing price.
+The chart compares LightGBM and DCA with the same budget: 100 units per signal month from January 2005 through December 2020, totalling 19,200 per strategy. DCA invests at the next trading session's close. LightGBM delays a flagged contribution by 36 months, holding it as cash earning 0% until its purchase date. Existing holdings remain invested.
 
-1. The **ML signal** uses the predicted class after applying the probability threshold. A class 1 prediction contributes twice the monthly base amount. A class 0 prediction skips that purchase. Previously purchased shares stay in the portfolio.
-2. **Dollar-cost averaging (DCA)** contributes a fixed amount every month.
-3. **Modified value averaging** increases contributions when the portfolio falls below its target value.
+The curves mark shares and uninvested cash to market through 2 January 2026. ROI is cumulative profit divided by contributions made to date; it is not an annualized return. Dividends, fees and taxes are excluded. The signals are the stored annual walk-forward predictions, not predictions from the final refitted model.
 
-ROI is cumulative profit divided by contributed capital. Each strategy can contribute a different total. The directional equity figure illustrates probability-weighted forward returns. Its monthly observations have overlapping forecast horizons, so the compounded curve is theoretical. Moving-average and RSI benchmarks are available in the strategy comparison scripts.
+![LightGBM and DCA cumulative ROI with equal contributions](docs/images/selected_lightgbm/investment_strategies.png)
 
-![Cumulative ROI of the selected shallow-weight1-f1_1 signal, DCA and modified value averaging from 1982 through 2022](docs/images/shallow_weight1_f1_1/investment_strategies.png)
-
-*The selected setup's class-based signal ends at 622.2% ROI, versus 596.3% for DCA (blue dashed line) and 598.3% for modified value averaging. With a monthly base amount of 1, cumulative contributions are 852, 492 and 492.36 units respectively. This compares profit relative to each strategy's contributions; it does not establish outperformance under an equal savings budget. The simulation excludes fees, dividends and cash interest.*
+*LightGBM ends at 351.58% ROI versus 332.01% for DCA, a difference of 19.57 percentage points. The export script checks the terminal values against the verified study results. The legacy pipeline's variable-contribution simulations remain available separately and use different accounting.*
 
 ---
 
@@ -365,7 +361,7 @@ Separating the research engine from the distributed lakehouse allows:
 
 | Domain | Technology | Purpose |
 | :--- | :--- | :--- |
-| **Machine Learning** | `XGBoost` | Gradient boosted decision trees for time series classification |
+| **Machine Learning** | `LightGBM`, `XGBoost`, `scikit-learn` | Selected LightGBM model and comparison estimators |
 | **Model Explainability** | `SHAP` | Game-theoretic TreeExplainer for feature attribution |
 | **Experiment Tracking & Model Registry** | `MLflow` | Execution history, metric comparison, model artifacts and optional model version registration |
 | **Scientific Computing** | `scikit-learn`, `pandas`, `numpy`, `scipy` | Feature engineering, calibration metrics, array computation |
@@ -384,7 +380,7 @@ Separating the research engine from the distributed lakehouse allows:
 
 ```text
 .
-├── docs/images/                      # Curated thesis figures, screenshots & source references
+├── docs/images/                      # LightGBM figures, historical archive & source references
 ├── docs/mlflow.md                    # MLflow setup, configuration, Docker & model loading guide
 ├── models/                           # 🧠 PRIMARY ANALYTICAL & ML ENGINE
 │   ├── src/                          # Core modular package
@@ -463,6 +459,30 @@ pip install -r requirements.txt
 # pip install -e ".[dev]"
 ```
 
+#### Reproduce and load the selected reference model
+
+```bash
+# Reproduce the chosen candidate's OOS scores, verify them, and refit the reference model
+python -m scripts.train_selected_model
+```
+
+This command uses the bundled archived-feature snapshot and the study's hybrid panel. It writes `models/artifacts/selected_lightgbm/`: the native LightGBM model, feature/parameter metadata, annual out-of-sample predictions, fold audit and a verification report. The saved estimator is subsequently fitted on all labeled months from 1962–2020; its own training predictions are not the reported test results. It has no calibrated live decision threshold.
+
+```python
+import json
+from pathlib import Path
+import lightgbm as lgb
+
+folder = Path("models/artifacts/selected_lightgbm/model")
+metadata = json.loads((folder / "metadata.json").read_text())
+model = lgb.Booster(model_file=str(folder / "model.txt"))
+# frame must contain features built with the documented definitions and release lags.
+p_up = model.predict(frame[metadata["features"]])
+p_negative = 1 - p_up
+```
+
+The general pipeline below also defaults to the selected LightGBM configuration, but prepares features from `models/data` using its existing dataset calendar. Its metrics need not match the archived-panel study. Final fitting exports a native model and metadata under `<out-dir>/model/`, even with MLflow disabled; `--out-dir` lets new runs preserve existing outputs.
+
 #### Run End-to-End Prediction Pipeline
 ```bash
 python models/predictions.py
@@ -489,7 +509,7 @@ python models/run_pipeline.py --stage explain
 
 #### Advanced Hyperparameter Search
 ```bash
-python models/run_pipeline.py --stage walk-forward --horizon 36 --random-search
+python models/run_pipeline.py --model xgboost --stage walk-forward --horizon 36 --random-search
 ```
 
 ---
@@ -537,7 +557,9 @@ docker compose -f docker/docker-compose.yml down
 
 ## Research Artifacts & Diagnostic Outputs
 
-The [selected project figures](docs/images/README.md) contain four MLflow figures for `shallow-weight1-f1_1` and five original thesis images covering model evaluation, explainability, orchestration, distributed processing, and partitioned storage. The gallery includes source references and raw-download links. These documentation assets live in `docs/images/`, separately from generated run outputs; the source ledger records the selected run, evaluation dates and image fingerprints.
+The [selected project figures](docs/images/README.md) show seven regenerated LightGBM diagnostics: ROC/PR, risk signals, the walk-forward price/classification timeline, confusion matrix, equal-budget ROI, SHAP beeswarm and a local SHAP waterfall. Evaluation figures use the saved 2005–2020 out-of-sample predictions; SHAP explains the saved 1962–2020 full-history fit. Historical XGBoost and thesis images remain in the archive, and infrastructure screenshots still describe the original PoC. The source ledger records input and image fingerprints.
+
+Regenerate the current figures with `python -m scripts.export_lightgbm_figures`. This verifies the stored scores, portfolio accounting and model/data hashes before publishing the gallery.
 
 Executing the ML pipeline generates high-resolution figures and evaluation tables under `models/metrics/`:
 
@@ -549,7 +571,7 @@ Executing the ML pipeline generates high-resolution figures and evaluation table
 | `walk_forward_roc_pr.png` | Diagnostic | Dual ROC and Precision-Recall curves across walk-forward folds |
 | `walk_forward_classification.png` | Timeline | Time series of S&P 500 price overlaid with model probability step curves |
 | `shap_summary_cls.png` | XAI | Global SHAP beeswarm chart ranking macroeconomic feature attributions |
-| `shap_last_prediction_cls.png` | XAI | Local SHAP waterfall decomposition of the latest live market observation |
+| `shap_last_prediction_cls.png` | XAI | Local SHAP waterfall for the last labeled training row (in-sample) |
 | `walk_forward_equity_curve_directional.png`| Backtest | Cumulative probability-weighted equity trajectory vs Buy & Hold |
 | `roi_strategies_walk_forward.png` | Backtest | Total ROI comparison: DCA vs Modified Value Averaging vs ML Signal |
 | `final_rollout_subperiod_metrics.png` | Validation | Out-of-sample stability breakdown across early and late 10-year regimes |
@@ -560,7 +582,7 @@ Executing the ML pipeline generates high-resolution figures and evaluation table
 ## MLflow Experiment Tracking
 
 Pipeline executions automatically log parameters, dataset fingerprints, per-fold and
-aggregate evaluation metrics, predictions, diagnostic figures and the final XGBoost
+aggregate evaluation metrics, predictions, diagnostic figures and the final selected
 model to MLflow. Tracking is enabled by default for both pipeline entry points.
 
 Each execution creates a parent run with its configuration and dataset metadata,
@@ -569,7 +591,7 @@ plus a child run for each requested stage:
 - **`eda`**: correlation and target distribution figures.
 - **`walk-forward`**: per-fold metric histories, aggregate scores, baselines, thresholds, predictions and evaluation figures.
 - **`rollout`**: final out-of-sample evaluation metrics, predictions and diagnostic figures.
-- **`explain`**: in-sample diagnostics, SHAP figures and the saved XGBoost model.
+- **`explain`**: in-sample diagnostics, SHAP figures and the saved model in its native MLflow flavor.
 
 To compare validation results in the UI, select the **`walk-forward`** or **`rollout`**
 child runs; their metrics are recorded separately from the parent configuration.
@@ -598,9 +620,9 @@ Use `--no-mlflow` to disable tracking, `--experiment-name` to group executions, 
 
 ## Roadmap
 
-- [x] Time-aware financial feature engineering with zero lookahead bias.
+- [x] Publication lags for macroeconomic features and a comparison using archived releases.
 - [x] Purged Walk-Forward Cross-Validation with temporal embargo.
-- [x] XGBoost classifier with dynamic F1 threshold tuning.
+- [x] Selected LightGBM with oversampling and dynamic F1 threshold tuning; legacy XGBoost retained.
 - [x] Probabilistic calibration diagnostics (ECE, Brier decomposition).
 - [x] SHAP game-theoretic explainability suite.
 - [x] MLflow experiment tracking, model artifacts and optional Model Registry.

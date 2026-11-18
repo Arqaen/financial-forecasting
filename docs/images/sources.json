@@ -131,5 +131,85 @@
         }
       ]
     }
+  ],
+  "lightgbm_runs": [
+    {
+      "model": "lightgbm_h36_previous_ros",
+      "generator": "scripts/export_lightgbm_figures.py",
+      "test_period": "2005-2020",
+      "shap_training_period": "1962-2020",
+      "predictions": "models/artifacts/selected_lightgbm/walk_forward_predictions.csv",
+      "predictions_sha256": "0032ad14f0b96042430bc3a19a00ebc494ac956a5faaf2a4c6cfe84310da33dd",
+      "model_sha256": "85b942b4ae43badf7b76b658368ace0ff4305cd275f233614f927bcddff0a1fe",
+      "training_sha256": "89d9298265362b22f4a7add810088f5653a376cba0998399d816b5b24e5a4c13",
+      "test_metrics": {
+        "n": 192,
+        "n0": 34,
+        "prevalence0": 0.17708333333333334,
+        "AP0": 0.7466228321712787,
+        "ROC_AUC": 0.7883469843633656,
+        "brier": 0.20414293814079051,
+        "logloss": 0.5870724404020774,
+        "precision0": 0.696969696969697,
+        "recall0": 0.6764705882352942,
+        "F1_0": 0.6865671641791045,
+        "detected": 23,
+        "false_alarms": 10,
+        "alerts": 33,
+        "precision24": 0.9166666666666666,
+        "recall24": 0.6470588235294118,
+        "AP0_lift": 4.216223052261338,
+        "wealth": 86704.17393355625,
+        "contributed": 19200,
+        "roi_pct": 351.58423923727213,
+        "dca_roi_pct": 332.01140198982193,
+        "vs_DCA_pp": 19.572837247450195
+      },
+      "roi_history_sha256": "0156dbb65900fd95d22def006d0e02aa9e27603e6d3d4d34b05792ad35cb3922",
+      "figures": [
+        {
+          "file": "selected_lightgbm/classification.png",
+          "width": 2059,
+          "height": 835,
+          "sha256": "cd1605c5cff90461edce292dfa820596983ebd298127c27b392028bbbff4cb76"
+        },
+        {
+          "file": "selected_lightgbm/confusion_matrix.png",
+          "width": 1011,
+          "height": 903,
+          "sha256": "4e2ac13cb71aad3293a0b695c98082ef8bf5e17ef8dbc5847cd48ddce053189f"
+        },
+        {
+          "file": "selected_lightgbm/investment_strategies.png",
+          "width": 2059,
+          "height": 920,
+          "sha256": "4884030ae602403a0b6c8c0e1008fd67cb2d30cb098de823bfb308eee2e52930"
+        },
+        {
+          "file": "selected_lightgbm/roc_pr_class0.png",
+          "width": 2059,
+          "height": 784,
+          "sha256": "58f69f0627b7c91a3c6011f14051bb7e71d433b453a7d2179c9fe09218bee7d7"
+        },
+        {
+          "file": "selected_lightgbm/shap_last_prediction_cls.png",
+          "width": 1671,
+          "height": 772,
+          "sha256": "6edfd669a895b42080f76b6df64db32374499d6ee9f128163037f810009f9017"
+        },
+        {
+          "file": "selected_lightgbm/shap_summary_cls.png",
+          "width": 1594,
+          "height": 1007,
+          "sha256": "c114dcbb3e8711388d928c1f56083ba476e9b97858432dc7d453b373194aec4f"
+        },
+        {
+          "file": "selected_lightgbm/walk_forward_classification.png",
+          "width": 2240,
+          "height": 1120,
+          "sha256": "a6286da2d847fadf0343229093153d0d17ac115c147c187167ea1cac1bf1662c"
+        }
+      ]
+    }
   ]
 }
