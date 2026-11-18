@@ -1,4 +1,4 @@
-"""Compare classification/regression signals and equal-budget trading policies.
+"""Reproduce the published comparison of signals and equal-budget trading policies.
 
 Run: python -m scripts.compare_signal_strategies
 Development economics stop in 2004; evaluation never selects the development winner.
@@ -32,15 +32,10 @@ from threadpoolctl import threadpool_limits
 from models.src.config import DATA_DIR, DEFAULT_FEATURES, LIGHTGBM_PARAMS
 from models.src.data_loader import load_raw_dataset
 from models.src.estimators import build_classifier
-from models.src.features import (
-    add_technical_indicators,
-    apply_macro_release_lags,
-    compute_macro_and_valuation_features,
-    create_targets,
-)
+from models.src.features import create_targets
 from models.src.tuning import oversample_class_zero
-from scripts.compare_full_grid import make_folds, predict_fold
-from scripts.train_selected_model import ARCHIVED_FEATURES, DEFAULT_OUTPUT, ROOT
+from scripts.compare_full_grid import make_folds, predict_fold, prepare_grid_values
+from scripts.train_selected_model import ARCHIVED_FEATURES, HISTORICAL_OUTPUT, ROOT
 
 OUT = ROOT / "docs/experiments/signal-strategies"
 HORIZON = 36
@@ -64,11 +59,8 @@ POLICIES = (
 
 def load_panel():
     raw = load_raw_dataset()
-    x = compute_macro_and_valuation_features(
-        apply_macro_release_lags(add_technical_indicators(raw, HORIZON)), HORIZON
-    )[DEFAULT_FEATURES].replace([np.inf, -np.inf], np.nan)
     archived = pd.read_csv(ARCHIVED_FEATURES, index_col="fecha", parse_dates=True)
-    x.update(archived[archived.columns.intersection(DEFAULT_FEATURES)])
+    x = prepare_grid_values(raw, archived, HORIZON, historical_erp=True)[DEFAULT_FEATURES]
     target = create_targets(raw, HORIZON).loc["1962":"2020"]
     assert target.target_reg.notna().all()
     close = (
@@ -123,7 +115,7 @@ def make_predictions(x, target):
             )
         )
     reference = pd.read_csv(
-        DEFAULT_OUTPUT / "walk_forward_predictions.csv", index_col="date", parse_dates=True
+        HISTORICAL_OUTPUT / "walk_forward_predictions.csv", index_col="date", parse_dates=True
     )
     np.testing.assert_allclose(predictions["classifier_ros1"].p0, reference.p0, rtol=1e-10)
     np.testing.assert_array_equal(predictions["classifier_ros1"].alert, reference.alert)
@@ -496,7 +488,7 @@ def run(out=OUT):
     sources = [
         ARCHIVED_FEATURES,
         DATA_DIR / "sp500.csv",
-        DEFAULT_OUTPUT / "walk_forward_predictions.csv",
+        HISTORICAL_OUTPUT / "walk_forward_predictions.csv",
         Path(__file__),
     ]
     manifest = dict(
@@ -545,7 +537,7 @@ def refresh_fingerprints(out):
         *sorted(DATA_DIR.glob("*.csv")),
         *sorted((ROOT / "models/src").glob("*.py")),
         ARCHIVED_FEATURES,
-        DEFAULT_OUTPUT / "walk_forward_predictions.csv",
+        HISTORICAL_OUTPUT / "walk_forward_predictions.csv",
         ROOT / "scripts/compare_full_grid.py",
         ROOT / "scripts/compare_ensembles.py",
         ROOT / "scripts/train_selected_model.py",

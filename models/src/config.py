@@ -107,6 +107,9 @@ FINAL_FIXED_PARAMS: Dict = {
 # ==========================================
 # Feature Definitions
 # ==========================================
+ERP_FORMULA = "1 / sp500_pe_ratio - DGS10 / 100"
+HISTORICAL_ERP_FORMULA = "1 / sp500_pe_ratio - DGS10"
+
 DEFAULT_FEATURES: List[str] = [
     "equity_risk_premium",
     "credit_spread",
@@ -145,8 +148,8 @@ ALL_CANDIDATE_FEATURES: List[str] = [
     "hy_spread_change_3m",
     "credit_impulse",
     "real_rate",
-    "HOUST",
-    "TOTALSA",
+    "houst_yoy",
+    "totalsa_yoy",
     "T10Y2Y",
     "curve_slope",
     "USSLIND",
@@ -162,6 +165,6 @@ TOP_SHAP_FEATURES: List[str] = [
     "permit_yoy",
     "equity_risk_premium",
     "sp500_earnings_yield",
-    "HOUST",
+    "houst_yoy",
     "unemp_change_12m",
 ]

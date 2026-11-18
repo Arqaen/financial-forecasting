@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from models.src.config import ALL_CANDIDATE_FEATURES
 from models.src.features import (
     add_technical_indicators,
     apply_macro_release_lags,
@@ -103,6 +104,31 @@ def test_apply_macro_release_lags_shifts_gdp_and_monthly(
         assert lagged_df[col].iloc[15] == raw_df[col].iloc[14]
 
 
+@pytest.mark.parametrize(
+    ("source", "feature"), [("HOUST", "houst_yoy"), ("TOTALSA", "totalsa_yoy")]
+)
+def test_macro_growth_uses_lagged_levels_without_filling_gaps(
+    sample_monthly_dates: pd.DatetimeIndex, source: str, feature: str
+) -> None:
+    dates = sample_monthly_dates
+    raw = pd.DataFrame({"Close": 100.0 + np.arange(len(dates)), source: 10.0}, index=dates)
+    raw.loc[dates[12] :, source] = 15.0
+    raw.loc[dates[14], source] = np.nan
+    prepared, features = prepare_modeling_dataset(
+        raw,
+        features=ALL_CANDIDATE_FEATURES,
+        horizon=1,
+        start_date=str(dates[0].date()),
+        end_date=str(dates[-1].date()),
+        keep_missing_features=True,
+    )
+
+    assert feature in features and source not in features
+    assert prepared[feature].iloc[:13].isna().all()
+    assert prepared[feature].iloc[13] == pytest.approx(0.5)
+    assert prepared[feature].iloc[[15, 27]].isna().all()
+
+
 def test_add_technical_indicators(sample_monthly_dates: pd.DatetimeIndex) -> None:
     """Verify EMA, RSI, and ROC calculations."""
     n = len(sample_monthly_dates)
@@ -168,8 +194,8 @@ def test_compute_macro_and_valuation_features(sample_monthly_dates: pd.DatetimeI
     expected_spread = df["BAA"] - df["AAA"]
     assert np.allclose(feat_df["credit_spread"], expected_spread)
 
-    # Check equity risk premium = earnings_yield - DGS10
-    expected_erp = (1.0 / 25.0) - df["DGS10"]
+    # DGS10 is quoted in percent and the earnings yield is a decimal.
+    expected_erp = (1.0 / 25.0) - df["DGS10"] / 100.0
     assert np.allclose(feat_df["equity_risk_premium"], expected_erp)
 
     # Check high_inflation flag when T10YIE > 2.5

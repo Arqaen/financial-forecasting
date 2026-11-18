@@ -52,5 +52,6 @@
   "training_sha256": "89d9298265362b22f4a7add810088f5653a376cba0998399d816b5b24e5a4c13",
   "model_sha256": "85b942b4ae43badf7b76b658368ace0ff4305cd275f233614f927bcddff0a1fe",
   "threshold": null,
-  "usage": "Full-history fit. Probabilities are uncalibrated. Select an operating threshold on past-only validation; final-fit diagnostics are in-sample."
+  "usage": "Full-history fit. Probabilities are uncalibrated. Select an operating threshold on past-only validation; final-fit diagnostics are in-sample.",
+  "equity_risk_premium_formula": "1 / sp500_pe_ratio - DGS10"
 }

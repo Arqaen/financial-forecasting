@@ -1,4 +1,4 @@
-"""Reproduce the selected study candidate, then export a full-history reference fit.
+"""Evaluate and refit the selected LightGBM configuration with consistent ERP units.
 
 Run from the repository root: python -m scripts.train_selected_model
 No grid search or test-set parameter selection is performed here.
@@ -16,28 +16,35 @@ from lightgbm import Booster
 from models.src.config import DEFAULT_FEATURES, DEFAULT_HORIZON, DEFAULT_MODEL, MODELS_DIR
 from models.src.data_loader import load_raw_dataset
 from models.src.estimators import build_classifier, model_parameters, save_fitted_model
-from models.src.features import (
-    add_technical_indicators,
-    apply_macro_release_lags,
-    compute_macro_and_valuation_features,
-    create_targets,
-)
+from models.src.features import create_targets
 from models.src.tuning import oversample_class_zero
-from scripts.compare_full_grid import make_folds, market_inputs, metrics, predict_fold
+from scripts.compare_full_grid import (
+    make_folds,
+    market_inputs,
+    metrics,
+    predict_fold,
+    prepare_grid_values,
+)
 
 ROOT = MODELS_DIR.parent
 ARCHIVED_FEATURES = MODELS_DIR / "reference" / "archived_features.csv"
-DEFAULT_OUTPUT = MODELS_DIR / "artifacts" / "selected_lightgbm"
+HISTORICAL_OUTPUT = MODELS_DIR / "artifacts" / "selected_lightgbm"
+DEFAULT_OUTPUT = MODELS_DIR / "artifacts" / "selected_lightgbm_erp_corrected"
 
 
-def train_reference(output_dir: Path = DEFAULT_OUTPUT) -> dict:
+def train_reference(output_dir: Path | None = None, *, historical_erp: bool = False) -> dict:
+    reference_dir = HISTORICAL_OUTPUT if historical_erp else DEFAULT_OUTPUT
+    output_dir = output_dir or reference_dir
+    other_reference = DEFAULT_OUTPUT if historical_erp else HISTORICAL_OUTPUT
+    if output_dir.resolve() == other_reference.resolve():
+        raise ValueError("Choose an output directory for the requested ERP formula.")
+
     horizon = DEFAULT_HORIZON
     raw = load_raw_dataset()
-    values = compute_macro_and_valuation_features(
-        apply_macro_release_lags(add_technical_indicators(raw, horizon)), horizon
-    )[DEFAULT_FEATURES].replace([np.inf, -np.inf], np.nan)
     archived = pd.read_csv(ARCHIVED_FEATURES, index_col="fecha", parse_dates=True)
-    values.update(archived[archived.columns.intersection(DEFAULT_FEATURES)])
+    values = prepare_grid_values(raw, archived, horizon, historical_erp=historical_erp)[
+        DEFAULT_FEATURES
+    ]
     target = create_targets(raw, horizon).target.loc["1962":"2020"].astype(int)
     folds, audit = make_folds(values, target, horizon, "previous")
     template = build_classifier(DEFAULT_MODEL, **model_parameters())
@@ -46,18 +53,19 @@ def train_reference(output_dir: Path = DEFAULT_OUTPUT) -> dict:
     )
     test = predictions.loc["2005":"2020"]
     results = metrics(test, market_inputs(horizon))
-    selected = pd.read_csv(ROOT / "docs/experiments/multihorizon-grid/selected_models.csv")
-    expected = selected.loc[
-        (selected.horizon == horizon)
-        & (selected.features == "previous")
-        & (selected.model == DEFAULT_MODEL)
-        & selected.oversampling
-    ].squeeze()
-    for key in ("AP0", "ROC_AUC", "F1_0", "detected", "false_alarms", "roi_pct", "vs_DCA_pp"):
-        if not np.isclose(results[key], expected[key], rtol=1e-9, atol=1e-10):
-            raise ValueError(
-                f"Reference result changed for {key}: {results[key]} != {expected[key]}"
-            )
+    if historical_erp:
+        selected = pd.read_csv(ROOT / "docs/experiments/multihorizon-grid/selected_models.csv")
+        expected = selected.loc[
+            (selected.horizon == horizon)
+            & (selected.features == "previous")
+            & (selected.model == DEFAULT_MODEL)
+            & selected.oversampling
+        ].squeeze()
+        for key in ("AP0", "ROC_AUC", "F1_0", "detected", "false_alarms", "roi_pct", "vs_DCA_pp"):
+            if not np.isclose(results[key], expected[key], rtol=1e-9, atol=1e-10):
+                raise ValueError(
+                    f"Reference result changed for {key}: {results[key]} != {expected[key]}"
+                )
 
     # Freeze the reference training calendar. Later datasets require a new evaluation.
     X = values.loc[target.index]
@@ -72,6 +80,7 @@ def train_reference(output_dir: Path = DEFAULT_OUTPUT) -> dict:
         oversampling=True,
         class_zero_weight=1.0,
         output_dir=output_dir,
+        historical_erp=historical_erp,
     )
     reloaded = Booster(model_file=str(output_dir / "model/model.txt"))
     np.testing.assert_allclose(reloaded.predict(X), model.predict_proba(X)[:, 1], rtol=1e-12)
@@ -98,5 +107,9 @@ def train_reference(output_dir: Path = DEFAULT_OUTPUT) -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUTPUT)
-    train_reference(parser.parse_args().out_dir)
+    parser.add_argument("--out-dir", type=Path)
+    parser.add_argument(
+        "--historical-erp", action="store_true", help="Reproduce the published fit."
+    )
+    args = parser.parse_args()
+    train_reference(args.out_dir, historical_erp=args.historical_erp)

@@ -2,7 +2,7 @@
 
 A time-aware, modular machine learning research framework for predicting macroeconomic regimes, financial market directions, and simulating quantitative investment strategies with temporal purging and explicit data-revision limitations.
 
-The default estimator is **LightGBM, 36 months, five features and 1:1 random oversampling**. See the [selection rationale and results](../README.md#selected-model-and-experiments). `python -m scripts.train_selected_model` reproduces the selected archived-panel experiment and saves the reference model. The general pipeline retains XGBoost through `--model xgboost`; random search is available only for that legacy estimator.
+The default estimator is **LightGBM, 36 months, five features and 1:1 random oversampling**. See the [selection rationale and results](../README.md#selected-model-and-experiments). `python -m scripts.train_selected_model` evaluates and refits this configuration with corrected ERP units. Add `--historical-erp` to reproduce the published experiment. The general pipeline retains XGBoost through `--model xgboost`; random search is available only for that legacy estimator.
 
 ---
 

@@ -134,80 +134,82 @@
   ],
   "lightgbm_runs": [
     {
-      "model": "lightgbm_h36_previous_ros",
+      "model": "lightgbm_h36_previous_ros_erp_corrected",
+      "equity_risk_premium_formula": "1 / sp500_pe_ratio - DGS10 / 100",
       "generator": "scripts/export_lightgbm_figures.py",
       "test_period": "2005-2020",
       "shap_training_period": "1962-2020",
-      "predictions": "models/artifacts/selected_lightgbm/walk_forward_predictions.csv",
-      "predictions_sha256": "0032ad14f0b96042430bc3a19a00ebc494ac956a5faaf2a4c6cfe84310da33dd",
-      "model_sha256": "85b942b4ae43badf7b76b658368ace0ff4305cd275f233614f927bcddff0a1fe",
-      "training_sha256": "89d9298265362b22f4a7add810088f5653a376cba0998399d816b5b24e5a4c13",
+      "predictions": "models/artifacts/selected_lightgbm_erp_corrected/walk_forward_predictions.csv",
+      "predictions_sha256": "6cd1fa2f166784570cde31e41b9bce8a5c07a42d5362caf1150964608a3e29a1",
+      "model_artifact": "models/artifacts/selected_lightgbm_erp_corrected/model/model.txt",
+      "model_sha256": "14b94174617a586ab5b70de2214dd8cfe8ad1c6b961308887e1f66a6f0d0e156",
+      "training_sha256": "fec00ac54a5d09444557aeb22f07d1968d3b34a5293368e91530706ad968f993",
       "test_metrics": {
         "n": 192,
         "n0": 34,
         "prevalence0": 0.17708333333333334,
-        "AP0": 0.7466228321712787,
-        "ROC_AUC": 0.7883469843633656,
-        "brier": 0.20414293814079051,
-        "logloss": 0.5870724404020774,
-        "precision0": 0.696969696969697,
-        "recall0": 0.6764705882352942,
-        "F1_0": 0.6865671641791045,
-        "detected": 23,
-        "false_alarms": 10,
-        "alerts": 33,
-        "precision24": 0.9166666666666666,
-        "recall24": 0.6470588235294118,
-        "AP0_lift": 4.216223052261338,
-        "wealth": 86704.17393355625,
+        "AP0": 0.7645666337258133,
+        "ROC_AUC": 0.9494601638123604,
+        "brier": 0.10861794815897748,
+        "logloss": 0.3754748261088075,
+        "precision0": 0.5714285714285714,
+        "recall0": 0.47058823529411764,
+        "F1_0": 0.5161290322580645,
+        "detected": 16,
+        "false_alarms": 12,
+        "alerts": 28,
+        "precision24": 0.6666666666666666,
+        "recall24": 0.47058823529411764,
+        "AP0_lift": 4.317552755157534,
+        "wealth": 85493.91458165264,
         "contributed": 19200,
-        "roi_pct": 351.58423923727213,
+        "roi_pct": 345.2808051127742,
         "dca_roi_pct": 332.01140198982193,
-        "vs_DCA_pp": 19.572837247450195
+        "vs_DCA_pp": 13.26940312295227
       },
-      "roi_history_sha256": "0156dbb65900fd95d22def006d0e02aa9e27603e6d3d4d34b05792ad35cb3922",
+      "roi_history_sha256": "af0f121ed4446a0f6a0a65d735c4ab3d855208aa35bdfcc135788f4795820a3e",
       "figures": [
         {
           "file": "selected_lightgbm/classification.png",
           "width": 2059,
           "height": 835,
-          "sha256": "cd1605c5cff90461edce292dfa820596983ebd298127c27b392028bbbff4cb76"
+          "sha256": "743cc3dae17af305568868835c7e648fdb5c02714a3800963503b35309b1be52"
         },
         {
           "file": "selected_lightgbm/confusion_matrix.png",
-          "width": 1011,
+          "width": 1092,
           "height": 903,
-          "sha256": "4e2ac13cb71aad3293a0b695c98082ef8bf5e17ef8dbc5847cd48ddce053189f"
+          "sha256": "57e97a24bbf3652038efc31cb05caf0b98f6a43720d89a30318a5ce748330316"
         },
         {
           "file": "selected_lightgbm/investment_strategies.png",
           "width": 2059,
           "height": 920,
-          "sha256": "4884030ae602403a0b6c8c0e1008fd67cb2d30cb098de823bfb308eee2e52930"
+          "sha256": "872d36e983cd6b3aae85dee6a65cf58c94444950c3c62c4aa8b30a2ed921b58f"
         },
         {
           "file": "selected_lightgbm/roc_pr_class0.png",
           "width": 2059,
           "height": 784,
-          "sha256": "58f69f0627b7c91a3c6011f14051bb7e71d433b453a7d2179c9fe09218bee7d7"
+          "sha256": "d004b4e68b2cd5af7e4a13cb4c4bb4649cd95614054710d5e3597477eac7d822"
         },
         {
           "file": "selected_lightgbm/shap_last_prediction_cls.png",
-          "width": 1671,
+          "width": 1568,
           "height": 772,
-          "sha256": "6edfd669a895b42080f76b6df64db32374499d6ee9f128163037f810009f9017"
+          "sha256": "c5a31454a3625a3d40c7f5884a05235a0d61e7057f4789a151da4687149c887a"
         },
         {
           "file": "selected_lightgbm/shap_summary_cls.png",
           "width": 1594,
           "height": 1007,
-          "sha256": "c114dcbb3e8711388d928c1f56083ba476e9b97858432dc7d453b373194aec4f"
+          "sha256": "96e756fd7a3cf4cefed15e3fd359c45eb1fe4689fceef15f7acbb222a15402ae"
         },
         {
           "file": "selected_lightgbm/walk_forward_classification.png",
           "width": 2240,
           "height": 1120,
-          "sha256": "a6286da2d847fadf0343229093153d0d17ac115c147c187167ea1cac1bf1662c"
+          "sha256": "1c788ec70ac6e8971d3173ab96328b35da0a6584467936eee9890ec0bf030fd8"
         }
       ]
     }

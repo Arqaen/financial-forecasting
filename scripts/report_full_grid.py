@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import ParameterGrid
 
+from models.src.config import HISTORICAL_ERP_FORMULA
 from scripts.compare_ensembles import create_targets, load_raw_dataset
 from scripts.compare_full_grid import GRIDS, HORIZONS, MODELS, TEST_DATES, market_inputs, metrics
 
@@ -42,6 +43,8 @@ def main():
     parser.add_argument("--input", type=Path, required=True)
     args = parser.parse_args()
     source = args.input.resolve()
+    manifest = json.loads((source / "manifest.json").read_text(encoding="utf-8"))
+    erp_formula = manifest.get("equity_risk_premium_formula", HISTORICAL_ERP_FORMULA)
     result = pd.read_csv(source / "all_combinations.csv")
     expected = len(HORIZONS) * 3 * 2 * sum(len(list(ParameterGrid(g))) for g in GRIDS.values())
     assert expected == 1476 and len(result) == expected + 72
@@ -234,9 +237,9 @@ Parameters remain fixed after development selection; estimators and alert thresh
 - **broad:** the union of these five, the 39 configured macro/valuation candidates and eight horizon-dependent technical candidates (EMA distances/spread, RSI, horizon momentum, 12-month drawdown and momentum change), deduplicated. Each feature must have at least 60 nonmissing observations and nonzero variation in the **unsampled fit window**. The audit records the actual available columns in every fold.
 - **selected8:** starts from the broad pool and keeps up to eight variables ranked by absolute Spearman association with the target in the unsampled fit window. Greedy screening rejects a variable with absolute Spearman correlation ≥0.90 to an already selected variable. This is a predefined feature-selection heuristic, not a claim to have found an optimal variable set.
 
-The 60-observation eligibility rule applies to all three policies, including `previous`; it differs from the earlier hybrid experiment's 60% coverage rule. Archived unemployment, M2, permits and credit-spread features replace revised values where archived observations exist. Other variables and archival gaps retain the repository's lagged/revised histories. **This expanded experiment uses one hybrid panel, not a fully point-in-time panel**; it does not repeat the archived-only sensitivity test. Derived features involving those macro series can still depend on revised raw histories. Inherited engineered-variable definitions are retained. Historical revisions and the previous research that informed candidate choice can still bias results.
+The 60-observation eligibility rule applies to all three policies, including `previous`; it differs from the earlier hybrid experiment's 60% coverage rule. Archived unemployment, M2, permits and credit-spread features replace revised values where archived observations exist. Other variables and archival gaps retain the repository's lagged/revised histories. **This expanded experiment uses one hybrid panel, not a fully point-in-time panel**; it does not repeat the archived-only sensitivity test. Derived features involving those macro series can still depend on revised raw histories. Historical revisions and the previous research that informed candidate choice can still bias results.
 
-**Inherited feature-definition limitation:** `equity_risk_premium` is currently `1 / P_E - DGS10`, although [DGS10 is expressed in percent](https://fred.stlouisfed.org/series/DGS10); subtracting a decimal yield consistently would require `DGS10 / 100`. Also, `curve_slope` is `DGS10 - T10Y3M`, even though [T10Y3M already represents the 10-year minus 3-month spread](https://fred.stlouisfed.org/series/T10Y3M), and `earnings_growth_12m` measures P/E changes rather than earnings changes. This experiment retains these numerical definitions for comparison with the existing model; their financial names should not be taken literally. Correcting their definitions would constitute a new experiment and could change the ranking.
+**Feature definitions.** This run used `{erp_formula}` for `equity_risk_premium`. The reciprocal of P/E is a decimal yield. [DGS10 is expressed in percent](https://fred.stlouisfed.org/series/DGS10). The inherited `curve_slope` formula subtracts `T10Y3M` from `DGS10`, although [`T10Y3M` already represents the 10-year minus 3-month spread](https://fred.stlouisfed.org/series/T10Y3M). The inherited `earnings_growth_12m` feature measures changes in the P/E ratio.
 
 Both sampling settings use identical calendar folds and feature selection. ROS retains all fitting rows and duplicates class 0 with replacement to a 1:1 count (seed 42); it is a no-op if class 0 is absent or is already at least as frequent as class 1. Validation and test rows are never resampled. Model seeds and grids are fixed; logistic loss remains in the boosting/logistic models. This comparison does not change operational pipeline defaults.
 

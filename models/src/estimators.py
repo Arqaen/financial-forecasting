@@ -12,8 +12,10 @@ from xgboost import XGBClassifier
 
 from .config import (
     DEFAULT_MODEL,
+    ERP_FORMULA,
     FINAL_FIXED_PARAMS,
     FIXED_PARAMS_BASE,
+    HISTORICAL_ERP_FORMULA,
     LIGHTGBM_PARAMS,
     MANUAL_PARAMS_BASE,
 )
@@ -48,6 +50,7 @@ def save_fitted_model(
     oversampling: bool,
     class_zero_weight: float,
     output_dir: Path,
+    historical_erp: bool = False,
 ) -> None:
     """Export a native model and its input contract, independent of MLflow."""
     directory = output_dir / "model"
@@ -81,6 +84,10 @@ def save_fitted_model(
         "threshold": None,
         "usage": "Full-history fit. Probabilities are uncalibrated. Select an operating threshold on past-only validation; final-fit diagnostics are in-sample.",
     }
+    if "equity_risk_premium" in X.columns:
+        metadata["equity_risk_premium_formula"] = (
+            HISTORICAL_ERP_FORMULA if historical_erp else ERP_FORMULA
+        )
     (directory / "metadata.json").write_text(
         json.dumps(metadata, indent=2, default=str) + "\n", encoding="utf-8", newline="\n"
     )

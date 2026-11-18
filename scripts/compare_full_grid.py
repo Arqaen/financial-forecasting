@@ -15,7 +15,7 @@ from sklearn.metrics import average_precision_score, brier_score_loss, log_loss,
 from sklearn.model_selection import ParameterGrid
 from threadpoolctl import threadpool_limits
 
-from models.src.config import ALL_CANDIDATE_FEATURES, DATA_DIR, DEFAULT_FEATURES
+from models.src.config import ALL_CANDIDATE_FEATURES, DATA_DIR, DEFAULT_FEATURES, ERP_FORMULA
 from scripts.compare_ensembles import (
     MODELS,
     add_technical_indicators,
@@ -47,6 +47,32 @@ GRIDS = {
     "lightgbm": {"num_leaves": [3, 7, 15], "learning_rate": [0.025, 0.05]},
 }
 TEST_DATES = pd.date_range("2005-01-31", "2020-12-31", freq="ME")
+
+
+def prepare_grid_values(raw, archived, horizon, *, historical_erp=False):
+    values = compute_macro_and_valuation_features(
+        apply_macro_release_lags(add_technical_indicators(raw, horizon)), horizon
+    )
+    if historical_erp:
+        # Reconstruct the input of the published models for historical comparisons.
+        values["equity_risk_premium"] = values["sp500_earnings_yield"] - values["DGS10"]
+    technical = [
+        f"ema_{max(3, horizon // 2)}_dist",
+        f"ema_{horizon}_dist",
+        f"ema_{2 * horizon}_dist",
+        "ema_spread",
+        "rsi_14",
+        f"roc_{horizon}",
+        "drawdown_12m",
+        "momentum_change",
+    ]
+    candidates = list(dict.fromkeys([*DEFAULT_FEATURES, *ALL_CANDIDATE_FEATURES, *technical]))
+    values = values[[c for c in candidates if c in values]].replace([np.inf, -np.inf], np.nan)
+    archived_columns = archived.columns.intersection(DEFAULT_FEATURES).drop(
+        "equity_risk_premium", errors="ignore"
+    )
+    values.update(archived[archived_columns])
+    return values
 
 
 def select_features(x, y, policy):
@@ -381,6 +407,7 @@ def main():
         sha256=digest.hexdigest(),
         horizons=args.horizons,
         grids=GRIDS,
+        equity_risk_premium_formula=ERP_FORMULA,
         development="1982-1999",
         evaluation="2005-2020",
     )
@@ -392,22 +419,7 @@ def main():
     archived = pd.read_csv(args.vintages, index_col="fecha", parse_dates=True)
     targets, fold_groups, audit = {}, {}, []
     for h in args.horizons:
-        values = compute_macro_and_valuation_features(
-            apply_macro_release_lags(add_technical_indicators(raw, h)), h
-        )
-        technical = [
-            f"ema_{max(3,h//2)}_dist",
-            f"ema_{h}_dist",
-            f"ema_{2*h}_dist",
-            "ema_spread",
-            "rsi_14",
-            f"roc_{h}",
-            "drawdown_12m",
-            "momentum_change",
-        ]
-        candidates = list(dict.fromkeys([*DEFAULT_FEATURES, *ALL_CANDIDATE_FEATURES, *technical]))
-        values = values[[c for c in candidates if c in values]].replace([np.inf, -np.inf], np.nan)
-        values.update(archived[archived.columns.intersection(DEFAULT_FEATURES)])
+        values = prepare_grid_values(raw, archived, h)
         targets[h] = create_targets(raw, h).target.loc["1962":"2020"].astype(int)
         assert targets[h].index.equals(pd.date_range("1962-01-31", "2020-12-31", freq="ME"))
         for policy in FEATURE_SETS:

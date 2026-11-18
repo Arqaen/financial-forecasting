@@ -1,4 +1,4 @@
-"""Regenerate the README figures from the saved LightGBM reference artifacts.
+"""Regenerate the README figures from the LightGBM artifacts with corrected ERP units.
 
 Run from the repository root: python -m scripts.export_lightgbm_figures
 Evaluation uses annual out-of-sample predictions; SHAP explains the saved full fit.
@@ -15,19 +15,15 @@ from lightgbm import Booster
 from PIL import Image
 from sklearn.metrics import confusion_matrix, precision_recall_curve, roc_curve
 
-from models.src.config import DATA_DIR, DEFAULT_FEATURES
+from models.src.config import DATA_DIR, ERP_FORMULA
 from models.src.data_loader import load_raw_dataset
-from models.src.features import (
-    add_technical_indicators,
-    apply_macro_release_lags,
-    compute_macro_and_valuation_features,
-    create_targets,
-)
+from models.src.features import create_targets
 from models.src.plots import plot_classification_timeline
-from scripts.compare_full_grid import market_inputs, metrics
+from scripts.compare_full_grid import market_inputs, metrics, prepare_grid_values
 from scripts.train_selected_model import ARCHIVED_FEATURES, DEFAULT_OUTPUT, ROOT
 
 OUT = ROOT / "docs/images/selected_lightgbm"
+MODEL_TITLE = "LightGBM · corrected ERP"
 BLUE, ORANGE, RED = "#1976a5", "#d28424", "#bf4444"
 
 
@@ -77,10 +73,11 @@ def portfolio_history(predictions, market):
 
 def main():
     plt.switch_backend("Agg")
-    OUT.mkdir(parents=True, exist_ok=True)
     plt.rcParams.update({"font.size": 11, "axes.spines.top": False, "axes.spines.right": False})
     predictions_path = DEFAULT_OUTPUT / "walk_forward_predictions.csv"
-    frame = pd.read_csv(predictions_path, index_col="date", parse_dates=True).loc["2005":"2020"]
+    frame = pd.read_csv(
+        predictions_path, index_col="date", parse_dates=True, float_precision="round_trip"
+    ).loc["2005":"2020"]
     assert frame.index.equals(pd.date_range("2005-01-31", "2020-12-31", freq="ME"))
     assert frame.alert.equals(frame.p0 > frame.threshold_p0)
     report = json.loads((DEFAULT_OUTPUT / "verification.json").read_text())
@@ -89,7 +86,35 @@ def main():
     for key, value in scores.items():
         np.testing.assert_allclose(value, report["test"][key], rtol=1e-10)
     negative = frame.actual.eq(0)
+    history = portfolio_history(frame, market)
+    np.testing.assert_allclose(history.lightgbm_roi.iloc[-1], scores["roi_pct"], rtol=1e-10)
+    np.testing.assert_allclose(history.dca_roi.iloc[-1], scores["dca_roi_pct"], rtol=1e-10)
+    np.testing.assert_allclose(history.lightgbm_wealth.iloc[-1], scores["wealth"], rtol=1e-10)
 
+    metadata = json.loads((DEFAULT_OUTPUT / "model/metadata.json").read_text())
+    model_path = DEFAULT_OUTPUT / "model/model.txt"
+    assert metadata["equity_risk_premium_formula"] == ERP_FORMULA
+    assert fingerprint(model_path) == metadata["model_sha256"]
+    assert fingerprint(ARCHIVED_FEATURES) == report["archived_features_sha256"]
+    raw = load_raw_dataset()
+    targets = create_targets(raw, 36)
+    labeled = targets.loc[frame.index]
+    np.testing.assert_array_equal(labeled.target.astype(int), frame.actual)
+    archived = pd.read_csv(ARCHIVED_FEATURES, index_col="fecha", parse_dates=True)
+    values = prepare_grid_values(raw, archived, 36)
+    y = targets.target.loc["1962":"2020"].astype(int)
+    X = values.loc[y.index, metadata["features"]]
+    training_hash = hashlib.sha256(
+        pd.concat([X, y.rename("target")], axis=1).to_csv(lineterminator="\n").encode()
+    ).hexdigest()
+    assert training_hash == metadata["training_sha256"]
+    model = Booster(model_file=str(model_path))
+    contributions = model.predict(X, pred_contrib=True)
+    np.testing.assert_allclose(
+        contributions.sum(axis=1), model.predict(X, raw_score=True), atol=1e-10
+    )
+
+    OUT.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5), layout="constrained")
     fpr, tpr, _ = roc_curve(negative, frame.p0)
     precision, recall, _ = precision_recall_curve(negative, frame.p0)
@@ -112,7 +137,7 @@ def main():
         ax.legend(loc="lower right" if ax is axes[0] else "upper right")
         ax.grid(alpha=0.15)
     fig.suptitle(
-        "LightGBM · 36 months · 1:1 oversampling\nOut-of-sample evaluation: 2005–2020 (192 months)",
+        f"{MODEL_TITLE} · 36 months · 1:1 oversampling\nOut-of-sample evaluation: 2005–2020 (192 months)",
         fontsize=14,
     )
     save("roc_pr_class0.png")
@@ -138,15 +163,12 @@ def main():
         ylim=(0, 1.03),
         ylabel="Class-0 probability / threshold",
         xlabel="Signal date",
-        title="LightGBM · out-of-sample risk signals, 2005–2020\nShaded months have a non-positive 36-month forward price return",
+        title=f"{MODEL_TITLE} · out-of-sample risk signals, 2005–2020\nShaded months have a non-positive 36-month forward price return",
     )
     ax.legend(loc="upper center", ncol=2, fontsize=9)
     ax.grid(axis="y", alpha=0.15)
     save("classification.png")
 
-    raw = load_raw_dataset()
-    labeled = create_targets(raw, 36).loc[frame.index]
-    np.testing.assert_array_equal(labeled.target.astype(int), frame.actual)
     timeline = pd.DataFrame(
         {
             "date": frame.index,
@@ -159,7 +181,7 @@ def main():
     plot_classification_timeline(
         timeline,
         out_path=OUT / "walk_forward_classification.png",
-        title="LightGBM · walk-forward 2005–2020 · 36-month target · 1:1 oversampling",
+        title=f"{MODEL_TITLE} · walk-forward 2005–2020 · 36-month target · 1:1 oversampling",
     )
 
     matrix = confusion_matrix(frame.actual, (~frame.alert).astype(int), labels=[0, 1])
@@ -184,14 +206,10 @@ def main():
         yticklabels=["0 · Non-positive", "1 · Positive"],
         xlabel="Predicted class",
         ylabel="Actual 36-month return",
-        title=f"LightGBM · confusion matrix, 2005–2020\nClass-0 F1 = {scores['F1_0']:.3f} · 192 OOS months",
+        title=f"{MODEL_TITLE} · confusion matrix, 2005–2020\nClass-0 F1 = {scores['F1_0']:.3f} · 192 OOS months",
     )
     save("confusion_matrix.png")
 
-    history = portfolio_history(frame, market)
-    np.testing.assert_allclose(history.lightgbm_roi.iloc[-1], scores["roi_pct"], rtol=1e-10)
-    np.testing.assert_allclose(history.dca_roi.iloc[-1], scores["dca_roi_pct"], rtol=1e-10)
-    np.testing.assert_allclose(history.lightgbm_wealth.iloc[-1], scores["wealth"], rtol=1e-10)
     history.to_csv(OUT / "roi_history.csv", index_label="date")
     fig, ax = plt.subplots(figsize=(12, 5), layout="constrained")
     ax.plot(
@@ -213,7 +231,7 @@ def main():
     ax.set(
         ylabel="Cumulative ROI on contributions (%)",
         xlabel="Portfolio valuation date",
-        title="LightGBM vs DCA · equal monthly contributions\nSignals: 2005–2020 · valuation through 2 January 2026",
+        title="LightGBM with corrected ERP vs DCA · equal monthly contributions\nSignals: 2005–2020 · valuation through 2 January 2026",
     )
     ax.legend(loc="upper left", title="Cash earns 0%; flagged contributions delayed 36 months")
     ax.grid(alpha=0.15)
@@ -227,30 +245,10 @@ def main():
     )
     save("investment_strategies.png")
 
-    metadata = json.loads((DEFAULT_OUTPUT / "model/metadata.json").read_text())
-    model_path = DEFAULT_OUTPUT / "model/model.txt"
-    assert fingerprint(model_path) == metadata["model_sha256"]
-    assert fingerprint(ARCHIVED_FEATURES) == report["archived_features_sha256"]
-    values = compute_macro_and_valuation_features(
-        apply_macro_release_lags(add_technical_indicators(raw, 36)), 36
-    )[DEFAULT_FEATURES].replace([np.inf, -np.inf], np.nan)
-    archived = pd.read_csv(ARCHIVED_FEATURES, index_col="fecha", parse_dates=True)
-    values.update(archived[archived.columns.intersection(DEFAULT_FEATURES)])
-    y = create_targets(raw, 36).target.loc["1962":"2020"].astype(int)
-    X = values.loc[y.index, metadata["features"]]
-    training_hash = hashlib.sha256(
-        pd.concat([X, y.rename("target")], axis=1).to_csv(lineterminator="\n").encode()
-    ).hexdigest()
-    assert training_hash == metadata["training_sha256"]
-    model = Booster(model_file=str(model_path))
-    contributions = model.predict(X, pred_contrib=True)
-    np.testing.assert_allclose(
-        contributions.sum(axis=1), model.predict(X, raw_score=True), atol=1e-10
-    )
     np.random.seed(42)
     shap.summary_plot(contributions[:, :-1], X, show=False, plot_size=(10, 5.5))
     plt.title(
-        "LightGBM · full reference fit, 1962–2020\nIn-sample feature attribution; output = log-odds of class 1",
+        f"{MODEL_TITLE} · full reference fit, 1962–2020\nIn-sample feature attribution; output = log-odds of class 1",
         fontsize=12,
         pad=22,
     )
@@ -266,7 +264,7 @@ def main():
         show=False,
     )
     plt.gcf().suptitle(
-        "LightGBM · 31 December 2020\nLast labeled training row; in-sample explanation, not a live forecast",
+        f"{MODEL_TITLE} · 31 December 2020\nLast labeled training row (in-sample explanation)",
         fontsize=11,
         y=1.08,
     )
@@ -287,12 +285,14 @@ def main():
     ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
     ledger["lightgbm_runs"] = [
         {
-            "model": "lightgbm_h36_previous_ros",
+            "model": "lightgbm_h36_previous_ros_erp_corrected",
+            "equity_risk_premium_formula": metadata["equity_risk_premium_formula"],
             "generator": "scripts/export_lightgbm_figures.py",
             "test_period": "2005-2020",
             "shap_training_period": "1962-2020",
-            "predictions": str(predictions_path.relative_to(ROOT)).replace("\\", "/"),
+            "predictions": predictions_path.relative_to(ROOT).as_posix(),
             "predictions_sha256": fingerprint(predictions_path),
+            "model_artifact": model_path.relative_to(ROOT).as_posix(),
             "model_sha256": fingerprint(model_path),
             "training_sha256": training_hash,
             "test_metrics": scores,

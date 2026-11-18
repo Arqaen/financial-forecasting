@@ -140,6 +140,10 @@ def compute_macro_and_valuation_features(
     if "PERMIT" in df.columns:
         df["permit_yoy"] = df["PERMIT"].pct_change(12)
 
+    for source, feature in (("HOUST", "houst_yoy"), ("TOTALSA", "totalsa_yoy")):
+        if source in df.columns:
+            df[feature] = df[source].pct_change(12, fill_method=None)
+
     if "T10Y3M" in df.columns:
         df["curve_slope_3m_change"] = df["T10Y3M"].diff(3)
         df["curve_change_12m"] = df["T10Y3M"].diff(12)
@@ -156,7 +160,7 @@ def compute_macro_and_valuation_features(
         if f"roc_{h}" in df.columns:
             df["value_momentum"] = df["sp500_earnings_yield"] * df[f"roc_{h}"]
         if "DGS10" in df.columns:
-            df["equity_risk_premium"] = df["sp500_earnings_yield"] - df["DGS10"]
+            df["equity_risk_premium"] = df["sp500_earnings_yield"] - df["DGS10"] / 100.0
 
     if "cape_data" in df.columns:
         df["cape_earnings_yield"] = 1.0 / df["cape_data"]
