@@ -1,0 +1,81 @@
+{
+  "sha256": "ad9742a858ffc333f21b570b9977f2b013af4819292e19421907c1a80f86da8a",
+  "horizons": [
+    6,
+    12,
+    24,
+    36,
+    48,
+    60
+  ],
+  "grids": {
+    "xgboost": {
+      "max_depth": [
+        1,
+        2,
+        4
+      ],
+      "min_child_weight": [
+        5,
+        10
+      ]
+    },
+    "logistic_l2": {
+      "logisticregression__C": [
+        0.01,
+        0.1,
+        1.0,
+        10.0,
+        100.0
+      ]
+    },
+    "extra_trees": {
+      "extratreesclassifier__max_depth": [
+        2,
+        4,
+        8
+      ],
+      "extratreesclassifier__min_samples_leaf": [
+        4,
+        8,
+        16
+      ]
+    },
+    "random_forest": {
+      "randomforestclassifier__max_depth": [
+        2,
+        4,
+        8
+      ],
+      "randomforestclassifier__min_samples_leaf": [
+        4,
+        8,
+        16
+      ]
+    },
+    "hist_gb": {
+      "max_leaf_nodes": [
+        3,
+        7,
+        15
+      ],
+      "learning_rate": [
+        0.025,
+        0.05
+      ]
+    },
+    "lightgbm": {
+      "num_leaves": [
+        3,
+        7,
+        15
+      ],
+      "learning_rate": [
+        0.025,
+        0.05
+      ]
+    }
+  },
+  "development": "1982-1999",
+  "evaluation": "2005-2020"
+}

@@ -1,0 +1,56 @@
+{
+  "model": "lightgbm",
+  "library_version": "4.7.0",
+  "horizon_months": 36,
+  "features": [
+    "equity_risk_premium",
+    "credit_spread",
+    "unemp_change_12m",
+    "m2_yoy",
+    "permit_yoy"
+  ],
+  "classes": [
+    0,
+    1
+  ],
+  "probability": "P(target=1); P(target=0)=1-P(target=1)",
+  "target": "1 if Close(t+h) > Close(t), otherwise 0",
+  "parameters": {
+    "boosting_type": "gbdt",
+    "class_weight": null,
+    "colsample_bytree": 1.0,
+    "importance_type": "split",
+    "learning_rate": 0.025,
+    "max_depth": -1,
+    "min_child_samples": 15,
+    "min_child_weight": 0.001,
+    "min_split_gain": 0.0,
+    "n_estimators": 100,
+    "n_jobs": 2,
+    "num_leaves": 3,
+    "objective": "binary",
+    "random_state": 42,
+    "reg_alpha": 0.0,
+    "reg_lambda": 1.0,
+    "subsample": 1.0,
+    "subsample_for_bin": 200000,
+    "subsample_freq": 0,
+    "deterministic": true,
+    "force_col_wise": true,
+    "verbosity": -1
+  },
+  "oversampling": true,
+  "oversampling_seed": 42,
+  "class_zero_weight": 1.0,
+  "training_start": "1962-01-31 00:00:00",
+  "training_end": "2020-12-31 00:00:00",
+  "training_rows_before_sampling": 708,
+  "training_class_counts_before_sampling": {
+    "1": 582,
+    "0": 126
+  },
+  "training_sha256": "89d9298265362b22f4a7add810088f5653a376cba0998399d816b5b24e5a4c13",
+  "model_sha256": "85b942b4ae43badf7b76b658368ace0ff4305cd275f233614f927bcddff0a1fe",
+  "threshold": null,
+  "usage": "Full-history fit. Probabilities are uncalibrated. Select an operating threshold on past-only validation; final-fit diagnostics are in-sample."
+}

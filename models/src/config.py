@@ -40,9 +40,27 @@ SIGNAL_MULTIPLIER: float = 2.0
 # ==========================================
 # Model Hyperparameters (XGBoost)
 # ==========================================
+DEFAULT_MODEL: str = "lightgbm"
+# Selected on development AP_0 in the multi-horizon study; binary logistic loss.
+LIGHTGBM_PARAMS: Dict = {
+    "objective": "binary",
+    "learning_rate": 0.025,
+    "n_estimators": 100,
+    "num_leaves": 3,
+    "min_child_samples": 15,
+    "reg_lambda": 1.0,
+    "random_state": 42,
+    "n_jobs": 2,
+    "deterministic": True,
+    "force_col_wise": True,
+    "verbosity": -1,
+}
+# The XGBoost settings below remain available for historical comparisons.
 DO_RANDOM_SEARCH: bool = False
 TUNE_EACH_FOLD: bool = False
 CLASS_ZERO_WEIGHT: float = 1.0
+OVERSAMPLE_CLASS_ZERO: bool = True  # Default for the pipeline entry points
+OVERSAMPLING_SEED: int = 42
 TUNING_OBJECTIVE: str = "logloss"
 RANDOM_SEARCH_N_ITER: int = 180
 RANDOM_SEARCH_SEED: int = 42

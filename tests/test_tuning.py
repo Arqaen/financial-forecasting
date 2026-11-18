@@ -7,7 +7,28 @@ import pandas as pd
 import pytest
 
 from models.src.config import PARAM_DIST
-from models.src.tuning import sample_param_combo, tune_xgb_random_search_timeval
+from models.src.tuning import (
+    oversample_class_zero,
+    sample_param_combo,
+    tune_xgb_random_search_timeval,
+)
+
+
+def test_oversampling_balances_only_class_zero_and_preserves_pairs() -> None:
+    dates = pd.date_range("2000-01-01", periods=8, freq="MS")
+    X = pd.DataFrame({"value": range(8)}, index=dates)
+    y = pd.Series([1, 0, 1, 1, 1, 0, 1, 1], index=dates)
+    X_fit, y_fit = oversample_class_zero(X, y)
+    assert y_fit.value_counts().to_dict() == {0: 6, 1: 6}
+    pd.testing.assert_frame_equal(X_fit.iloc[: len(X)], X, check_freq=False)
+    pd.testing.assert_series_equal(y_fit, y.loc[X_fit.index])
+    assert y_fit.iloc[len(y) :].eq(0).all()
+    pd.testing.assert_frame_equal(X_fit, oversample_class_zero(X, y)[0])
+    for subset in ([0, 2], [1, 5], [0, 1], [0, 1, 5]):
+        X_sub, y_sub = X.iloc[subset], y.iloc[subset]
+        X_same, y_same = oversample_class_zero(X_sub, y_sub)
+        pd.testing.assert_frame_equal(X_same, X_sub)
+        pd.testing.assert_series_equal(y_same, y_sub)
 
 
 def test_sample_param_combo() -> None:

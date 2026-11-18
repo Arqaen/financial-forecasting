@@ -267,7 +267,8 @@ def plot_classification_timeline(
         alpha=0.85,
         zorder=4,
     )
-    ax0.set_ylim(-0.05, 1.05)
+    # Leave room for the legend above class-1 points, including incorrect predictions.
+    ax0.set_ylim(-0.05, 1.15)
     ax0.set_ylabel("Clase")
 
     ax0b = ax0.twinx()

@@ -16,17 +16,16 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-from xgboost import XGBClassifier
 
 from .config import (
     CLASS_ZERO_WEIGHT,
     DEFAULT_HORIZON,
+    DEFAULT_MODEL,
     DO_RANDOM_SEARCH,
-    FIXED_PARAMS_BASE,
-    MANUAL_PARAMS_BASE,
     METRICS_DIR,
     MIN_TRAIN_SIZE,
     MONTHLY_AMOUNT,
+    OVERSAMPLE_CLASS_ZERO,
     PARAM_DIST,
     RANDOM_SEARCH_N_ITER,
     RANDOM_SEARCH_SEED,
@@ -37,6 +36,7 @@ from .config import (
     TUNE_EACH_FOLD,
     TUNING_OBJECTIVE,
 )
+from .estimators import build_classifier, model_parameters
 from .features import select_additional_features
 from .metrics import (
     best_threshold_by_f1,
@@ -68,7 +68,7 @@ from .plots import (
 )
 from .simulation import simulate_monthly_dca_roi, simulate_value_averaging_modified_roi
 from .tracking import ExperimentTracker
-from .tuning import fit_temporal_classifier, tune_xgb_random_search_timeval
+from .tuning import fit_temporal_classifier, oversample_class_zero, tune_xgb_random_search_timeval
 
 
 def generate_folds(
@@ -166,6 +166,8 @@ def run_walk_forward_evaluation(
     out_dir: Optional[Path] = None,
     do_random_search: bool = DO_RANDOM_SEARCH,
     class_zero_weight: float = CLASS_ZERO_WEIGHT,
+    oversampling: bool = OVERSAMPLE_CLASS_ZERO,
+    model_name: str = DEFAULT_MODEL,
     manual_params: Optional[Dict] = None,
     tuning_objective: str = TUNING_OBJECTIVE,
     tracker: Optional[ExperimentTracker] = None,
@@ -189,7 +191,7 @@ def run_walk_forward_evaluation(
         tuning_objective: Score used to select random-search candidates (logloss or AP_0).
         tracker: Optional tracker owned by the pipeline orchestrator.
         threshold_class: Class whose F1 selects the cutoff on P(1) in validation.
-        manual_params: Overrides for the manual XGBoost parameters.
+        manual_params: Overrides for the chosen estimator parameters.
         validation_reference_start: Anchor internal validation lengths to this history start.
         additional_features: Candidates selected separately within each fold's fit block.
         min_feature_observations: Required training observations for each extra feature.
@@ -198,6 +200,11 @@ def run_walk_forward_evaluation(
     Returns:
         Tuple containing (wf_df_predictions, wf_metrics_scorecard).
     """
+    if do_random_search and model_name != "xgboost":
+        raise ValueError(
+            "Random search is only supported for --model xgboost; LightGBM uses the selected fixed parameters."
+        )
+    model_parameters(model_name)  # Validate even when a fold has only one class.
     output_dir = out_dir or METRICS_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -246,6 +253,8 @@ def run_walk_forward_evaluation(
                 "purge": horizon,
                 "folds": len(folds),
                 "class_zero_weight": class_zero_weight,
+                "oversampling": oversampling,
+                "model": model_name,
                 "tuning_objective": tuning_objective,
                 "threshold_objective": f"F1_{threshold_class}",
                 "tune_each_fold": TUNE_EACH_FOLD,
@@ -308,6 +317,8 @@ def run_walk_forward_evaluation(
         y_es = y_train.iloc[es_slice]
         X_score = X_train.iloc[score_slice]
         y_score = y_train.iloc[score_slice]
+        if oversampling:
+            X_tr, y_tr = oversample_class_zero(X_tr, y_tr)
 
         if len(np.unique(y_tr)) < 2:
             best_t, _ = 0.5, float("nan")
@@ -315,8 +326,8 @@ def run_walk_forward_evaluation(
             proba = np.full(len(X_test), p_const, dtype=float)
             y_pred = (proba >= best_t).astype(int)
         else:
-            fixed_params = dict(FIXED_PARAMS_BASE)
-            configured_params = {**MANUAL_PARAMS_BASE, **(manual_params or {})}
+            fixed_params = model_parameters(model_name)
+            configured_params = manual_params or {}
 
             score_metric = tuning_objective if y_score.nunique() >= 2 else "logloss"
             if not do_random_search:
@@ -351,7 +362,7 @@ def run_walk_forward_evaluation(
             model_params = dict(fixed_params)
             model_params.update(best_params)
 
-            model = XGBClassifier(**model_params)
+            model = build_classifier(model_name, **model_params)
             fit_temporal_classifier(
                 model, X_tr, y_tr, X_es, y_es, class_zero_weight=class_zero_weight
             )
@@ -425,7 +436,8 @@ def run_walk_forward_evaluation(
                     "features": fold_features,
                     "fit_start": str(X_tr.index.min()),
                     "fit_end": str(X_tr.index.max()),
-                    "fit_rows": len(X_tr),
+                    "fit_rows": len(y_train.iloc[tr_slice]),
+                    "fit_rows_after_sampling": len(y_tr),
                     "early_stopping_start": str(X_es.index.min()),
                     "early_stopping_end": str(X_es.index.max()),
                     "threshold_validation_start": str(X_score.index.min()),

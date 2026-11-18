@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
 
 from models.src.explainability import train_final_model_and_explain
 
@@ -29,7 +29,7 @@ def test_train_final_model_and_explain(tmp_path: Path) -> None:
         out_dir=tmp_path,
     )
 
-    assert isinstance(model, XGBClassifier)
+    assert isinstance(model, LGBMClassifier)
     assert 0.0 <= proba <= 1.0
     assert "last_date" in diagnostics
     assert "final_proba" in diagnostics

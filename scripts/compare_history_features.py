@@ -92,6 +92,8 @@ def main(evaluation_scope: str = "both") -> None:
             predictions, scorecard = run_walk_forward_evaluation(
                 frame,
                 base_features,
+                model_name="xgboost",
+                oversampling=False,
                 horizon=36,
                 min_train_size=initial_rows,
                 test_size=12,

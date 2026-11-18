@@ -4,11 +4,23 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+from lightgbm import LGBMClassifier
 from sklearn.metrics import average_precision_score
 from xgboost import XGBClassifier
 
-from .config import CLASS_ZERO_WEIGHT, TUNING_OBJECTIVE
+from .config import CLASS_ZERO_WEIGHT, OVERSAMPLING_SEED, TUNING_OBJECTIVE
 from .metrics import binary_logloss
+
+
+def oversample_class_zero(X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series]:
+    """Duplicate class-0 fit rows with replacement until their count matches class 1."""
+    zeros = np.flatnonzero(y.to_numpy() == 0)
+    extra = int((y == 1).sum()) - len(zeros)
+    if not len(zeros) or extra <= 0:
+        return X, y
+    rng = np.random.RandomState(OVERSAMPLING_SEED)
+    indices = np.concatenate([np.arange(len(y)), rng.choice(zeros, size=extra, replace=True)])
+    return X.iloc[indices], y.iloc[indices]
 
 
 def training_sample_weights(y: pd.Series, class_zero_weight: float) -> Optional[np.ndarray]:
@@ -21,7 +33,7 @@ def training_sample_weights(y: pd.Series, class_zero_weight: float) -> Optional[
 
 
 def fit_temporal_classifier(
-    model: XGBClassifier,
+    model: Any,
     X_tr: pd.DataFrame,
     y_tr: pd.Series,
     X_es: pd.DataFrame,
@@ -30,6 +42,10 @@ def fit_temporal_classifier(
     class_zero_weight: float = CLASS_ZERO_WEIGHT,
 ) -> None:
     """Fit on weighted training rows, using the observed distribution for early stopping."""
+    if isinstance(model, LGBMClassifier):
+        # The selected LightGBM candidate has a fixed number of trees; no early stopping.
+        model.fit(X_tr, y_tr, sample_weight=training_sample_weights(y_tr, class_zero_weight))
+        return
     eval_set = [(X_es, y_es)] if y_es.nunique() >= 2 else None
     if eval_set is None:
         model.set_params(early_stopping_rounds=None)

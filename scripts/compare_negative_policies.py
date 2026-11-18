@@ -87,6 +87,8 @@ def main():
             predictions, _ = run_walk_forward_evaluation(
                 dataset,
                 features,
+                model_name="xgboost",
+                oversampling=False,
                 horizon=HORIZON,
                 min_train_size=240,
                 test_size=12,

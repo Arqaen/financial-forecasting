@@ -13,22 +13,22 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-from xgboost import XGBClassifier
 
 from .config import (
     CLASS_ZERO_WEIGHT,
     DEFAULT_HORIZON,
+    DEFAULT_MODEL,
     FINAL_GAP_MONTHS,
     FINAL_ROLLOUT_MONTHS,
-    FIXED_PARAMS_BASE,
-    MANUAL_PARAMS_BASE,
     METRICS_DIR,
     MIN_TRAIN_SIZE,
     MONTHLY_AMOUNT,
+    OVERSAMPLE_CLASS_ZERO,
     SCORE_FRAC,
     SIGNAL_MULTIPLIER,
     THRESHOLD_CLASS,
 )
+from .estimators import build_classifier, model_parameters
 from .metrics import (
     best_threshold_by_f1,
     binary_logloss,
@@ -55,7 +55,7 @@ from .plots import (
 )
 from .simulation import simulate_monthly_dca_roi
 from .tracking import ExperimentTracker
-from .tuning import fit_temporal_classifier
+from .tuning import fit_temporal_classifier, oversample_class_zero
 
 
 def run_final_rollout(
@@ -67,6 +67,8 @@ def run_final_rollout(
     gap_months: int = FINAL_GAP_MONTHS,
     min_train_size: int = MIN_TRAIN_SIZE,
     class_zero_weight: float = CLASS_ZERO_WEIGHT,
+    oversampling: bool = OVERSAMPLE_CLASS_ZERO,
+    model_name: str = DEFAULT_MODEL,
     manual_params: Optional[Dict] = None,
     out_dir: Optional[Path] = None,
     tracker: Optional[ExperimentTracker] = None,
@@ -88,11 +90,12 @@ def run_final_rollout(
         out_dir: Output directory for saving figures and tables.
         tracker: Optional tracker owned by the pipeline orchestrator.
         threshold_class: Class whose F1 selects the cutoff on P(1) in validation.
-        manual_params: Overrides for the manual XGBoost parameters.
+        manual_params: Overrides for the chosen estimator parameters.
 
     Returns:
         DataFrame of rollout predictions or None if insufficient history.
     """
+    model_parameters(model_name)
     output_dir = out_dir or METRICS_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -143,15 +146,17 @@ def run_final_rollout(
         y_score = y_val.iloc[es_size:]
 
     model_roll = None
+    if oversampling:
+        X_tr, y_tr = oversample_class_zero(X_tr, y_tr)
     if len(np.unique(y_tr)) < 2:
         best_t_roll, _ = 0.5, float("nan")
         p_const = float(np.clip(y_tr.mean(), 1e-6, 1.0 - 1e-6))
         roll_proba = np.full(len(X_roll), p_const, dtype=float)
         roll_pred = (roll_proba >= best_t_roll).astype(int)
     else:
-        model_params = {**FIXED_PARAMS_BASE, **MANUAL_PARAMS_BASE, **(manual_params or {})}
+        model_params = model_parameters(model_name, overrides=manual_params)
 
-        model_roll = XGBClassifier(**model_params)
+        model_roll = build_classifier(model_name, **model_params)
         fit_temporal_classifier(
             model_roll, X_tr, y_tr, X_es, y_es, class_zero_weight=class_zero_weight
         )
@@ -191,6 +196,8 @@ def run_final_rollout(
                 "rollout_months": rollout_months,
                 "gap_months": gap_months,
                 "class_zero_weight": class_zero_weight,
+                "oversampling": oversampling,
+                "model": model_name,
                 "train_end": str(train_df.index.max()),
                 "threshold": float(best_t_roll),
                 "threshold_objective": f"F1_{threshold_class}",

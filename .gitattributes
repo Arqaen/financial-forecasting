@@ -1,0 +1,4 @@
+# Reference artifacts are fingerprinted byte-for-byte; do not convert line endings.
+models/artifacts/** -text -whitespace
+models/reference/archived_features.csv -text whitespace=cr-at-eol
+docs/images/selected_lightgbm/roi_history.csv -text whitespace=cr-at-eol

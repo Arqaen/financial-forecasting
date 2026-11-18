@@ -130,18 +130,28 @@ def test_successive_default_trackers_use_same_project_database(tmp_path, monkeyp
     assert {run.info.run_name for run in runs} == {"first", "second"}
 
 
-def test_model_reload_and_registry(store, tmp_path):
+@pytest.mark.parametrize("family", ["xgboost", "lightgbm"])
+def test_model_reload_and_registry(store, tmp_path, family):
     uri, client, experiment_id = store
     X = pd.DataFrame({"f1": np.linspace(-1, 1, 30)})
     y = (X["f1"] > 0).astype(int)
-    model = XGBClassifier(n_estimators=3, max_depth=2).fit(X, y)
+    import mlflow.lightgbm
+    from lightgbm import LGBMClassifier
+
+    estimator = (
+        XGBClassifier(n_estimators=3, max_depth=2)
+        if family == "xgboost"
+        else LGBMClassifier(n_estimators=3, num_leaves=3, min_child_samples=3, verbosity=-1)
+    )
+    model = estimator.fit(X, y)
     tracker = ExperimentTracker(
         tracking_uri=uri, experiment_name="test", registered_model_name="direction-test"
     )
     with tracker.run({"stage": "explain", "horizon": 3}):
         with tracker.stage("explain", tmp_path / "metrics"):
             tracker.log_model(model, X.head())
-        loaded = mlflow.xgboost.load_model("models:/direction-test/1")
+        flavor = mlflow.xgboost if family == "xgboost" else mlflow.lightgbm
+        loaded = flavor.load_model("models:/direction-test/1")
         np.testing.assert_allclose(loaded.predict_proba(X), model.predict_proba(X))
     models = client.search_model_versions("name = 'direction-test'")
     assert len(models) == 1
@@ -214,7 +224,9 @@ def test_pipeline_dispatch_and_predictions(store, tmp_path, monkeypatch):
     )
 
     def evaluate(df, features, **kwargs):
+        assert kwargs["model_name"] == "lightgbm"
         assert kwargs["threshold_class"] == 0
+        assert kwargs["oversampling"] is True
         assert kwargs["class_zero_weight"] == 2.0
         assert kwargs["tuning_objective"] == "AP_0"
         kwargs["tracker"].log_metrics({"logloss_mean": 0.5})

@@ -1,11 +1,10 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.metrics import brier_score_loss, roc_auc_score
-from xgboost import XGBClassifier
 
 try:
     import shap
@@ -18,13 +17,14 @@ except ImportError:
 from .config import (
     CLASS_ZERO_WEIGHT,
     DEFAULT_HORIZON,
-    FINAL_FIXED_PARAMS,
-    MANUAL_PARAMS_BASE,
+    DEFAULT_MODEL,
     METRICS_DIR,
+    OVERSAMPLE_CLASS_ZERO,
     TOP_SHAP_FEATURES,
 )
+from .estimators import build_classifier, model_parameters, save_fitted_model
 from .metrics import binary_logloss, class_zero_metrics, precision_at_k
-from .tuning import training_sample_weights
+from .tuning import oversample_class_zero, training_sample_weights
 
 
 def train_final_model_and_explain(
@@ -33,10 +33,12 @@ def train_final_model_and_explain(
     *,
     horizon: int = DEFAULT_HORIZON,
     class_zero_weight: float = CLASS_ZERO_WEIGHT,
+    oversampling: bool = OVERSAMPLE_CLASS_ZERO,
+    model_name: str = DEFAULT_MODEL,
     top_shap_features: Optional[List[str]] = None,
     out_dir: Optional[Path] = None,
-) -> Tuple[XGBClassifier, float, Dict]:
-    """Train the final XGBoost model on the complete historical dataset and generate SHAP explainability plots.
+) -> Tuple[Any, float, Dict]:
+    """Train the selected final model on the complete historical dataset and generate SHAP explainability plots.
 
     Args:
         df: Prepared modeling DataFrame.
@@ -47,7 +49,7 @@ def train_final_model_and_explain(
         out_dir: Output directory for saving SHAP plots.
 
     Returns:
-        Tuple containing (trained_xgb_model, latest_prediction_probability, diagnostic_metrics_dict).
+        Tuple containing (trained_model, last_training_row_probability, diagnostic_metrics_dict).
     """
     output_dir = out_dir or METRICS_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -56,11 +58,19 @@ def train_final_model_and_explain(
     X = df[features]
     y = df["target"].astype(int)
 
-    final_model_params = dict(FINAL_FIXED_PARAMS)
-    final_model_params.update(MANUAL_PARAMS_BASE)
+    final_model = build_classifier(model_name, **model_parameters(model_name, final=True))
+    X_fit, y_fit = oversample_class_zero(X, y) if oversampling else (X, y)
+    final_model.fit(X_fit, y_fit, sample_weight=training_sample_weights(y_fit, class_zero_weight))
 
-    final_model = XGBClassifier(**final_model_params)
-    final_model.fit(X, y, sample_weight=training_sample_weights(y, class_zero_weight))
+    save_fitted_model(
+        final_model,
+        X,
+        y,
+        horizon=horizon,
+        oversampling=oversampling,
+        class_zero_weight=class_zero_weight,
+        output_dir=output_dir,
+    )
 
     last_X = X.iloc[[-1]]
     final_proba = float(final_model.predict_proba(last_X)[:, 1][0])

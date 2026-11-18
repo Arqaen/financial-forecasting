@@ -88,7 +88,10 @@ class ExperimentTracker:
             ) as active:
                 self.log_params(params)
                 self.log_dict(
-                    {name: version(name) for name in ("mlflow", "xgboost", "pandas", "numpy")},
+                    {
+                        name: version(name)
+                        for name in ("mlflow", "xgboost", "lightgbm", "pandas", "numpy")
+                    },
                     "environment.json",
                 )
                 print(f"MLflow run: {active.info.run_id} | Experiment: {self.experiment_name}")
@@ -227,11 +230,15 @@ class ExperimentTracker:
     def log_model(self, model: Any, example: pd.DataFrame) -> None:
         if self._mlflow is None:
             return
+        import mlflow.lightgbm
         import mlflow.xgboost
+        from lightgbm import LGBMClassifier
         from mlflow.models import infer_signature
 
         self.log_params(model.get_params())
-        mlflow.xgboost.log_model(
+        family = "lightgbm" if isinstance(model, LGBMClassifier) else "xgboost"
+        flavor = mlflow.lightgbm if family == "lightgbm" else mlflow.xgboost
+        flavor.log_model(
             model,
             name="model",
             input_example=example,
@@ -239,6 +246,6 @@ class ExperimentTracker:
             registered_model_name=self.registered_model_name,
             pip_requirements=[
                 f"{name}=={version(name)}"
-                for name in ("xgboost", "scikit-learn", "numpy", "pandas", "scipy")
+                for name in (family, "scikit-learn", "numpy", "pandas", "scipy")
             ],
         )

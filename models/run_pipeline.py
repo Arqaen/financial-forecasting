@@ -16,15 +16,19 @@ from src.config import (
     CLASS_ZERO_WEIGHT,
     DEFAULT_FEATURES,
     DEFAULT_HORIZON,
+    DEFAULT_MODEL,
     DO_RANDOM_SEARCH,
     FECHA_INICIO,
     FECHA_OBJETIVO,
     METRICS_DIR,
     MIN_HISTORY_RATIO,
+    OVERSAMPLE_CLASS_ZERO,
+    OVERSAMPLING_SEED,
     THRESHOLD_CLASS,
     TUNING_OBJECTIVE,
 )
 from src.data_loader import load_raw_dataset
+from src.estimators import model_parameters
 from src.explainability import train_final_model_and_explain
 from src.features import prepare_modeling_dataset
 from src.metrics import compute_spearman_rank_corr, correlation_report
@@ -95,6 +99,8 @@ def run_pipeline(
     threshold_class: int = THRESHOLD_CLASS,
     class_zero_weight: float = CLASS_ZERO_WEIGHT,
     tuning_objective: str = TUNING_OBJECTIVE,
+    oversampling: bool = OVERSAMPLE_CLASS_ZERO,
+    model_name: str = DEFAULT_MODEL,
 ) -> None:
     """Run specified or all stages of the financial machine learning pipeline.
 
@@ -116,10 +122,16 @@ def run_pipeline(
         threshold_class: Class whose F1 is maximized in temporal threshold selection.
         class_zero_weight: Training sample weight for observations labeled 0.
         tuning_objective: Scoring metric when random search is enabled.
+        oversampling: Balance the fit block by resampling class 0 with replacement.
     """
     load_dotenv(_CURRENT_DIR.parent / ".env", override=False)
     if stage not in ("all", "eda", "walk-forward", "rollout", "explain"):
         raise ValueError(f"Unknown pipeline stage: {stage}")
+    model_parameters(model_name)
+    if do_random_search and model_name != "xgboost":
+        raise ValueError(
+            "Use --model xgboost with --random-search; LightGBM uses the selected fixed parameters."
+        )
     tracker = ExperimentTracker(
         enabled=use_mlflow,
         tracking_uri=tracking_uri,
@@ -130,6 +142,7 @@ def run_pipeline(
     with tracker.run(
         {
             "stage": stage,
+            "model": model_name,
             "horizon": horizon,
             "start_date": start_date,
             "end_date": end_date,
@@ -137,6 +150,8 @@ def run_pipeline(
             "do_random_search": do_random_search,
             "threshold_class": threshold_class,
             "class_zero_weight": class_zero_weight,
+            "oversampling": oversampling,
+            "oversampling_seed": OVERSAMPLING_SEED,
             "tuning_objective": tuning_objective,
             "requested_features": ",".join(features or DEFAULT_FEATURES),
         }
@@ -155,6 +170,8 @@ def run_pipeline(
             threshold_class,
             class_zero_weight,
             tuning_objective,
+            oversampling,
+            model_name,
         )
 
 
@@ -172,6 +189,8 @@ def _execute_pipeline(
     threshold_class: int,
     class_zero_weight: float,
     tuning_objective: str,
+    oversampling: bool,
+    model_name: str,
 ) -> None:
     """Execute stages within the pipeline's tracking context."""
     output_dir = out_dir or METRICS_DIR
@@ -219,6 +238,8 @@ def _execute_pipeline(
                 threshold_class=threshold_class,
                 class_zero_weight=class_zero_weight,
                 tuning_objective=tuning_objective,
+                oversampling=oversampling,
+                model_name=model_name,
                 tracker=tracker,
             )
             tracker.log_frame(predictions, "predictions.csv")
@@ -237,6 +258,8 @@ def _execute_pipeline(
                 tracker=tracker,
                 threshold_class=threshold_class,
                 class_zero_weight=class_zero_weight,
+                oversampling=oversampling,
+                model_name=model_name,
             )
             if rollout is not None:
                 tracker.log_frame(rollout, "predictions.csv")
@@ -254,6 +277,8 @@ def _execute_pipeline(
                 horizon=horizon,
                 out_dir=output_dir,
                 class_zero_weight=class_zero_weight,
+                oversampling=oversampling,
+                model_name=model_name,
             )
             tracker.log_metrics(diagnostics)
             tracker.log_dict(
@@ -275,6 +300,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Financial ML Research & Quantitative Prediction Engine",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument("--model", choices=["lightgbm", "xgboost"], default=DEFAULT_MODEL)
+    parser.add_argument(
+        "--out-dir", type=Path, help="Directory for metrics and the native fitted model"
     )
     parser.add_argument(
         "--stage",
@@ -321,6 +350,12 @@ def parse_args() -> argparse.Namespace:
         help="Class whose F1 selects the walk-forward and rollout decision threshold",
     )
     parser.add_argument(
+        "--oversampling",
+        action=argparse.BooleanOptionalAction,
+        default=OVERSAMPLE_CLASS_ZERO,
+        help="Balance class 0 to 1:1 by random oversampling within each fit block",
+    )
+    parser.add_argument(
         "--class-zero-weight",
         type=float,
         default=CLASS_ZERO_WEIGHT,
@@ -348,7 +383,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--experiment-name", help="MLflow experiment name")
     parser.add_argument("--run-name", help="MLflow run display name")
     parser.add_argument(
-        "--registered-model-name", help="Register the final XGBoost model under this name"
+        "--registered-model-name", help="Register the final fitted model under this name"
     )
     return parser.parse_args()
 
@@ -357,6 +392,8 @@ if __name__ == "__main__":
     args = parse_args()
     run_pipeline(
         stage=args.stage,
+        model_name=args.model,
+        out_dir=args.out_dir,
         horizon=args.horizon,
         start_date=args.start_date,
         end_date=args.end_date,
@@ -371,4 +408,5 @@ if __name__ == "__main__":
         threshold_class=args.threshold_class,
         class_zero_weight=args.class_zero_weight,
         tuning_objective=args.tuning_objective,
+        oversampling=args.oversampling,
     )
