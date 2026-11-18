@@ -5,10 +5,10 @@ copied byte-for-byte from the companion study's `fuentes/variables_pit.csv`.
 Observation-date and source columns are preserved. The verification report records
 its SHA-256 checksum.
 
-The reference training command overlays nonmissing archived values for the original
-features on the lagged revised panel. It does not replace missing values with zero,
-and it does not imply that every input is point-in-time. In particular, the ERP
-definition and its source data remain those of the historical experiment.
+The reference training command overlays available archived values on the lagged
+revised panel. The equity risk premium is calculated separately from historical
+P/E and DGS10. The archive-only sensitivity excludes it and leaves archive gaps
+missing. [Coverage and results](../../docs/experiments/reference-robustness.md#point-in-time-inputs)
 
 Run `python -m scripts.train_selected_model` from the repository root to verify the
 selected candidate's out-of-sample metrics and export the frozen 1962–2020 fit.

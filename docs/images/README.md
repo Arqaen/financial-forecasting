@@ -4,7 +4,7 @@ These seven figures document **LightGBM with corrected equity risk premium units
 
 ## Out-of-sample evaluation
 
-The 192 monthly predictions cover January 2005–December 2020 and come from annual purged walk-forward fits. Class 0 means a non-positive 36-month forward price return. Thresholds are selected on past validation data by class-1 F1. The overlapping monthly targets are not independent episodes.
+The 192 monthly predictions cover January 2005–December 2020 and come from annual purged walk-forward fits. Class 0 means a non-positive 36-month forward price return. Thresholds are selected on past validation data by class-1 F1. The historical period informed model research, and all 34 class-0 months fall in 2005–2008. [Robustness audit](../experiments/reference-robustness.md)
 
 ![LightGBM class-0 ROC and precision-recall](selected_lightgbm/roc_pr_class0.png)
 

@@ -10,7 +10,7 @@ S&P 500 directional forecasting with LightGBM, purged walk-forward validation, a
 
 ![LightGBM class-0 out-of-sample ROC and precision-recall curves](docs/images/selected_lightgbm/roc_pr_class0.png)
 
-*LightGBM with a 36-month horizon and 1:1 oversampling. Across 192 out-of-sample months from 2005–2020, class-0 ROC-AUC is 0.949 and AP is 0.765, against a prevalence of 0.177.* [Figure gallery](docs/images/README.md)
+*Retrospective walk-forward results for 2005–2020. LightGBM achieved ROC-AUC 0.949 and class-0 AP 0.765. All 34 non-positive outcomes cluster in 2005–2008, and adjacent 36-month labels share 35 months. The result still requires prospective confirmation.* [Robustness audit](docs/experiments/reference-robustness.md) · [Figure gallery](docs/images/README.md)
 
 ---
 
@@ -262,7 +262,7 @@ ROI uses equal monthly contributions, purchases at the next trading session's cl
 
 LightGBM with five features and 1:1 oversampling led the 36-month development comparison. HistGradientBoosting without oversampling had the highest retrospective ROI (354.87%). The grid used inconsistent units for ERP. The table above reports the selected configuration after refitting with consistent units. [Original grid](docs/experiments/multihorizon-grid/results.md) · [Methodology](docs/experiments/multihorizon-grid/methodology.md) · [Historical LightGBM metrics](models/artifacts/selected_lightgbm/verification.json) · [Current LightGBM metrics](models/artifacts/selected_lightgbm_erp_corrected/verification.json)
 
-**Remaining limitations.** The panel combines archived and revised macroeconomic values, so it is not fully point-in-time. The 34 negative months and most of the strategy's advantage come from one episode (2005–2008). Oversampled probabilities are uncalibrated. The horizon was chosen retrospectively. The strategy still needs evaluation on an untouched period.
+**Robustness.** The horizon and feature configuration were selected after comparisons on historical data. The panel combines archived and revised values, and oversampled probabilities are uncalibrated. Excluding the equity risk premium, whose P/E input lacks an archived publication history, lowers evaluation ROC-AUC to **0.427** and turns **+13.27 pp** cumulative ROI versus DCA into **−3.27 pp**. Training on archived features alone gives ROC-AUC **0.316** and **−4.45 pp** versus DCA. [Robustness audit and prospective validation protocol](docs/experiments/reference-robustness.md)
 
 **Strategy follow-up.** The later [classification/regression strategy study](docs/experiments/signal-strategies/results.md) does not support replacing this research reference with regression, or replacing DCA with a validated trading system. The best development-selected regression policy underperformed DCA in evaluation; the largest regression evaluation ROI came from a retrospectively chosen policy with just two alerts.
 
@@ -289,7 +289,7 @@ The curves mark shares and uninvested cash to market through 2 January 2026. ROI
 
 ![LightGBM and DCA cumulative ROI with equal contributions](docs/images/selected_lightgbm/investment_strategies.png)
 
-*LightGBM ends at 345.28% ROI versus 332.01% for DCA, a difference of 13.27 percentage points.* [Daily portfolio history](docs/images/selected_lightgbm/roi_history.csv)
+*LightGBM ends at 345.28% ROI versus 332.01% for DCA, a difference of 13.27 percentage points of cumulative ROI and 0.22 percentage points of annualized money-weighted return (XIRR). Starting contributions in 2009 gives −2.27 pp of cumulative ROI versus DCA.* [Daily portfolio history](docs/images/selected_lightgbm/roi_history.csv) · [Costs, adjusted SPY and episode sensitivity](docs/experiments/reference-robustness.md#investment-results)
 
 ### Classification versus regression: alternative strategies
 

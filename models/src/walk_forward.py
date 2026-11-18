@@ -101,7 +101,7 @@ def generate_folds(
     folds: List[Tuple[slice, slice]] = []
     start = int(min_train)
 
-    while start < n - test_size:
+    while start + test_size <= n:
         train_end = start - purge
         test_end = start + test_size
         folds.append((slice(0, train_end), slice(start, test_end)))

@@ -28,13 +28,23 @@ def valid_wf_params(draw) -> Tuple[int, int, int, int, int]:
     min_train = draw(st.integers(min_value=purge + 1, max_value=120))
     test_size = draw(st.integers(min_value=1, max_value=24))
     embargo = draw(st.integers(min_value=0, max_value=12))
-    n = draw(st.integers(min_value=min_train + test_size + 1, max_value=600))
+    n = draw(st.integers(min_value=min_train + test_size, max_value=600))
     return n, min_train, test_size, purge, embargo
 
 
 # ==============================================================================
 # Property-Based Invariant Tests (Hypothesis)
 # ==============================================================================
+
+
+def test_generate_folds_includes_exact_final_test_window() -> None:
+    assert generate_folds(n=16, min_train=12, test_size=4, purge=2) == [
+        (slice(0, 10), slice(12, 16)),
+    ]
+    assert generate_folds(n=21, min_train=12, test_size=4, purge=2, embargo=1) == [
+        (slice(0, 10), slice(12, 16)),
+        (slice(0, 15), slice(17, 21)),
+    ]
 
 
 @given(params=valid_wf_params())
@@ -88,6 +98,8 @@ def test_property_fold_bounds_and_test_sizes(params: Tuple[int, int, int, int, i
 
         # Test window size exactness
         assert (test_slice.stop - test_slice.start) == test_size
+
+    assert folds[-1][1].stop + embargo + test_size > n
 
 
 @given(params=valid_wf_params())
