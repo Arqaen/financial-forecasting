@@ -10,11 +10,14 @@ python -m mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri sqlite:
 ```
 
 Open <http://127.0.0.1:5000> to compare runs. The default experiment is
-`financial-forecasting-xgboost`. Metadata and the optional Model Registry use
+`financial-forecasting`. Metadata and the optional Model Registry use
 `.mlflow/mlflow.db`; model files and diagnostics use `.mlflow/artifacts/`.
 Both locations are resolved against the repository, regardless of the training
 command's working directory. Start the UI command above **from the repository root**.
 Cleaning `models/metrics/` does not delete previous experiments.
+Earlier runs are available in the `financial-forecasting-xgboost` experiment.
+To keep logging there, set `MLFLOW_EXPERIMENT_NAME` or pass
+`--experiment-name financial-forecasting-xgboost`.
 
 ## What each run contains
 
@@ -27,7 +30,7 @@ Only the requested stages create child runs:
 | `eda` | Correlation and target distribution figures |
 | `walk-forward` | Mean validation metrics, baselines, ROI, metric histories indexed by fold, fold date ranges, actual model parameters and thresholds, predictions and scorecard CSVs, diagnostic figures |
 | `rollout` | Out-of-sample metrics, baselines, ROI, threshold, training end date, parameters, predictions CSV and diagnostic figures; insufficient history is recorded as skipped |
-| `explain` | In-sample diagnostics, latest probability, SHAP figures and final XGBoost model with input example, signature and pinned inference dependencies |
+| `explain` | In-sample diagnostics, latest probability, SHAP figures and the final model in its LightGBM or XGBoost flavor with input example, signature and pinned inference dependencies |
 
 Walk-forward and rollout also save an `investment/` artifact folder with the ROI
 comparison figure, monthly portfolio CSVs and `assumptions.json`. Walk-forward
@@ -66,7 +69,7 @@ Use `--threshold-class 0` or `1` to select which class's F1 determines the
 cutoff within each training window. The cutoff is on the score for class 1.
 Use `--class-zero-weight` to change the training weight of class 0 (class 1 has
 weight 1). Validation and test metrics use the observed class distribution.
-With `--random-search --tuning-objective AP_0`, walk-forward selects model
+With `--model xgboost --random-search --tuning-objective AP_0`, walk-forward selects model
 parameters by class-0 average precision on temporal validation data. A
 single-class scoring block falls back to log loss. With tuning once, the
 first subsequent scoring block containing both classes can select by AP_0.
@@ -127,14 +130,14 @@ precedence over environment configuration.
 | --- | --- | --- |
 | `MLFLOW_ENABLED` | `--no-mlflow` disables tracking | `true` |
 | `MLFLOW_TRACKING_URI` | `--tracking-uri` | Repository-local SQLite |
-| `MLFLOW_EXPERIMENT_NAME` | `--experiment-name` | `financial-forecasting-xgboost` |
+| `MLFLOW_EXPERIMENT_NAME` | `--experiment-name` | `financial-forecasting` |
 | `MLFLOW_RUN_NAME` | `--run-name` | Stage and horizon |
 | `MLFLOW_REGISTERED_MODEL_NAME` | `--registered-model-name` | Unset: save model without registry registration |
 
 ```bash
 python models/run_pipeline.py --stage walk-forward --experiment-name horizon-comparison --horizon 12
 python models/run_pipeline.py --stage eda --no-mlflow
-python models/run_pipeline.py --stage explain --registered-model-name financial-direction-xgboost
+python models/run_pipeline.py --stage explain --registered-model-name sp500-direction-lightgbm
 ```
 
 Registration creates a version of the final model; it does not promote or deploy it.
@@ -158,22 +161,23 @@ training at the store whose UI you intend to inspect.
 
 ## Load a registered model
 
-After training with `--registered-model-name financial-direction-xgboost`:
+After training the default LightGBM model with `--registered-model-name sp500-direction-lightgbm`:
 
 ```python
 import mlflow
-import mlflow.xgboost
+import mlflow.lightgbm
 
 # Run from the repository root, or use the remote tracking server URI.
 mlflow.set_tracking_uri("sqlite:///.mlflow/mlflow.db")
-model = mlflow.xgboost.load_model("models:/financial-direction-xgboost/1")
+model = mlflow.lightgbm.load_model("models:/sp500-direction-lightgbm/1")
 # X must contain the same ordered, engineered feature columns used for training.
 probabilities = model.predict_proba(X)[:, 1]
 ```
 
-The saved classifier consumes engineered features; preprocessing remains in
+The saved classifier consumes engineered features. Preprocessing is defined in
 `models/src/features.py`. For an unregistered model, copy its model URI from the
-`explain` run in the MLflow UI and pass it to `mlflow.xgboost.load_model`.
+`explain` run in the MLflow UI and pass it to `mlflow.lightgbm.load_model`.
+Use `mlflow.xgboost.load_model` for runs trained with `--model xgboost`.
 
-See the official [XGBoost flavor API](https://mlflow.org/docs/latest/api_reference/python_api/mlflow.xgboost.html)
+See the official [LightGBM flavor API](https://mlflow.org/docs/latest/api_reference/python_api/mlflow.lightgbm.html)
 and [tracking server documentation](https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/).

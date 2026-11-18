@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "data-pipeline-management"
+name = "financial-forecasting"
 version = "0.1.0"
-description = "Time-aware quantitative machine learning pipeline for macroeconomic regime forecasting and financial market directional prediction."
+description = "S&P 500 directional forecasting with LightGBM, purged walk-forward validation, and SHAP explainability."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -42,6 +42,9 @@ dependencies = [
     "cloudscraper>=1.2.71",
     "python-dotenv>=1.0.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/Arqaen/financial-forecasting"
 
 [project.optional-dependencies]
 dev = [

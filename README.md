@@ -1,18 +1,12 @@
-# Financial time series forecasting with LightGBM
+# Financial Forecasting
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white)
-[![CI](https://github.com/Arqaen/data-pipeline-management/actions/workflows/ci.yml/badge.svg)](https://github.com/Arqaen/data-pipeline-management/actions/workflows/ci.yml)
+[![CI](https://github.com/Arqaen/financial-forecasting/actions/workflows/ci.yml/badge.svg?branch=quant)](https://github.com/Arqaen/financial-forecasting/actions/workflows/ci.yml)
 ![Machine Learning](https://img.shields.io/badge/ML-LightGBM%20%7C%20SHAP-189AB4?logo=scikitlearn&logoColor=white)
 ![Validation](https://img.shields.io/badge/validation-Purged%20Walk--Forward-success)
-![Data Engineering](https://img.shields.io/badge/data%20engineering-Kafka%20%7C%20Spark%20%7C%20Airflow-orange)
-![Storage](https://img.shields.io/badge/lakehouse-MinIO%20(Parquet)-C72E49?logo=minio&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A time-aware quantitative machine learning framework for forecasting long-term macroeconomic regimes and directional trends for the **S&P 500 index**. The platform combines macroeconomic and valuation signals, applies publication lags, evaluates models with purged walk-forward splits, and explains predictions with SHAP. **The selected default is LightGBM at 36 months with the original five variables and 1:1 oversampling**.
-
-**MLflow experiment tracking is implemented** to compare pipeline executions and preserve their parameters, validation metrics, predictions, diagnostic figures and trained LightGBM and historical XGBoost models.
-
-Additionally, the repository features an exploratory **Data Engineering Proof of Concept (PoC)** demonstrating containerized, distributed streaming ingestion and lakehouse storage (Kafka, Spark, Airflow, MinIO).
+S&P 500 directional forecasting with LightGBM, purged walk-forward validation, and SHAP explainability. The [selected model](#selected-model-and-experiments) uses five macroeconomic and valuation features, a 36-month horizon, and 1:1 oversampling. The pipeline accounts for publication lags and logs runs and model artifacts to [MLflow](docs/mlflow.md).
 
 ![LightGBM class-0 out-of-sample ROC and precision-recall curves](docs/images/selected_lightgbm/roc_pr_class0.png)
 
@@ -35,7 +29,7 @@ Additionally, the repository features an exploratory **Data Engineering Proof of
   - [Selected model and experiments](#selected-model-and-experiments)
   - [Explainable AI (XAI) via Tree SHAP](#explainable-ai-xai-via-tree-shap)
 - [Quantitative Strategy Simulation & Benchmarking](#quantitative-strategy-simulation--benchmarking)
-- [Data Engineering Proof of Concept (PoC)](#data-engineering-proof-of-concept-poc)
+- [Optional data engineering proof of concept](#data-engineering-proof-of-concept-poc)
   - [Streaming & Lakehouse Ingestion Pipeline](#streaming--lakehouse-ingestion-pipeline)
   - [Decoupled Architecture Rationale](#decoupled-architecture-rationale)
 - [Tech Stack](#tech-stack)
@@ -318,9 +312,7 @@ The [results and policy table](docs/experiments/signal-strategies/results.md), [
 
 ## Data Engineering Proof of Concept (PoC)
 
-> [!NOTE]
-> **Architectural Scope & Transparency:**
-> The lakehouse infrastructure described below currently operates as an **exploratory Proof of Concept (PoC)**. It is **architecturally decoupled** from the standalone Machine Learning engine and serves as an engineering testbed to explore scalable, containerized streaming ingestion and partitioned storage for enterprise environments.
+This optional lakehouse proof of concept runs independently of the forecasting pipeline. It uses synthetic events to demonstrate containerized ingestion with Kafka, Spark, Airflow, and MinIO.
 
 ### Streaming & Lakehouse Ingestion Pipeline
 
@@ -460,8 +452,8 @@ The machine learning engine runs standalone with Python 3.10+:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/Arqaen/data-pipeline-management.git
-cd data-pipeline-management
+git clone https://github.com/Arqaen/financial-forecasting.git
+cd financial-forecasting
 
 # 2. Create and activate a virtual environment
 python -m venv venv

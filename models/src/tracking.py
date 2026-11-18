@@ -13,7 +13,7 @@ import pandas as pd
 
 from .config import MODELS_DIR
 
-DEFAULT_EXPERIMENT = "financial-forecasting-xgboost"
+DEFAULT_EXPERIMENT = "financial-forecasting"
 TRACKING_DIR = MODELS_DIR.parent / ".mlflow"
 
 
