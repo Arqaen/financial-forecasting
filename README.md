@@ -16,7 +16,7 @@ Additionally, the repository features an exploratory **Data Engineering Proof of
 
 ![LightGBM class-0 out-of-sample ROC and precision-recall curves](docs/images/selected_lightgbm/roc_pr_class0.png)
 
-*LightGBM with corrected equity risk premium, a 36-month horizon and 1:1 oversampling. Across 192 out-of-sample months from 2005–2020, class-0 ROC-AUC is 0.949 and AP is 0.765, against a prevalence of 0.177.* [Figure gallery](docs/images/README.md)
+*LightGBM with a 36-month horizon and 1:1 oversampling. Across 192 out-of-sample months from 2005–2020, class-0 ROC-AUC is 0.949 and AP is 0.765, against a prevalence of 0.177.* [Figure gallery](docs/images/README.md)
 
 ---
 
@@ -128,7 +128,7 @@ The feature engine transforms raw series into horizon-adapted, economically grou
 ```text
 Feature Engineering Pipeline
 ├── 1. Valuation & Risk Premia
-│   ├── Equity Risk Premium (ERP):  ERP = (1 / P/E) - 10Y Treasury Yield
+│   ├── Equity Risk Premium (ERP):  1 / P/E minus the 10Y Treasury yield in decimal form
 │   ├── S&P 500 Earnings Yield:     EY = 1 / P/E
 │   ├── CAPE Earnings Yield:        CAPE_EY = 1 / CAPE
 │   └── Value-Momentum Interaction: EY * Rate_of_Change(h)
@@ -250,29 +250,27 @@ Evaluation Metrics Suite
 
 **The project default is LightGBM, a 36-month target, the original five features and random oversampling of class 0 to 1:1.** It uses binary logistic loss, 100 trees, three leaves, learning rate 0.025, minimum 15 samples per leaf and L2 regularization 1.0. The seed is 42. Oversampling is applied only after the temporal split, within the fitting block; validation and test distributions remain unchanged. The default threshold maximizes class-1 F1 on historical validation.
 
-The features are `equity_risk_premium`, `credit_spread`, `unemp_change_12m`, `m2_yoy` and `permit_yoy`. Current training computes `equity_risk_premium` as `1 / P_E - DGS10 / 100`, with both yields in decimal units. The [corrected fit and walk-forward results](models/artifacts/selected_lightgbm_erp_corrected/verification.json) use the same model settings and dates as the published study.
+The features are `equity_risk_premium`, `credit_spread`, `unemp_change_12m`, `m2_yoy` and `permit_yoy`.
 
 **What was tested.** We compared XGBoost, regularized logistic regression, Random Forest, Extra Trees, HistGradientBoosting and LightGBM, plus validation-selected probability ensembles. The grid covered 6-, 12-, 24-, 36-, 48- and 60-month targets, with and without oversampling, using the original variables, a broad feature pool and up to eight variables selected within each fitting window. There were 1,476 individual configurations and 72 ensemble/selector results. Hyperparameters were selected by development AP₀ (1982–1999), then evaluated on the common 2005–2020 test calendar with temporal purging and mature labels.
 
-| LightGBM metric | Corrected ERP | Historical ERP |
-| --- | ---: | ---: |
-| Development AP₀, 1982–1999 | 0.061 | 0.776 |
-| Test AP₀ / ROC-AUC, 2005–2020 | 0.765 / 0.949 | 0.747 / 0.788 |
-| Test class-0 precision / recall / F1 | 0.571 / 0.471 / 0.516 | 0.697 / 0.676 / 0.687 |
-| Test unfavourable months detected / total | 16 / 34 | 23 / 34 |
-| Test false alarms | 12 | 10 |
-| Cumulative test strategy ROI / DCA ROI | 345.28% / 332.01% | 351.58% / 332.01% |
-| Test difference versus DCA | +13.27 pp | +19.57 pp |
+| Metric | Selected LightGBM |
+| --- | ---: |
+| Development AP₀ / class-0 prevalence, 1982–1999 | 0.061 / 0.079 |
+| Test AP₀ / ROC-AUC, 2005–2020 | 0.765 / 0.949 |
+| Test class-0 precision / recall / F1 | 0.571 / 0.471 / 0.516 |
+| Test unfavourable months detected / total | 16 / 34 |
+| Test false alarms | 12 |
+| Cumulative test strategy ROI / DCA ROI | 345.28% / 332.01% |
+| Test difference versus DCA | +13.27 pp |
 
 ROI uses equal monthly contributions, purchases at the next trading session's close, and a 36-month delay for contributions flagged as risky. Deferred cash earns 0%; all holdings are valued on 2 January 2026. Dividends, fees and taxes are excluded. This is cumulative ROI, not an annual return. The older pipeline strategy charts use different contribution rules and are not directly comparable.
 
-**How the configuration was chosen.** LightGBM with five features and 1:1 oversampling won the 36-month development comparison under the historical ERP formula. HistGradientBoosting without oversampling achieved the highest retrospective ROI (354.87%) in that grid. The corrected ERP evaluation refits the same LightGBM configuration. Its development AP₀ of 0.061 is below the period's class-0 prevalence of 0.079.
+LightGBM with five features and 1:1 oversampling led the 36-month development comparison. HistGradientBoosting without oversampling had the highest retrospective ROI (354.87%). The grid used inconsistent units for ERP. The table above reports the selected configuration after refitting with consistent units. [Original grid](docs/experiments/multihorizon-grid/results.md) · [Methodology](docs/experiments/multihorizon-grid/methodology.md) · [Historical LightGBM metrics](models/artifacts/selected_lightgbm/verification.json) · [Current LightGBM metrics](models/artifacts/selected_lightgbm_erp_corrected/verification.json)
 
-**Remaining limitations.** The panel combines archived and revised macroeconomic values, so it is not fully point-in-time. The 34 negative months belong to one historical episode (2005–2008); the economic advantage is concentrated there. Oversampled probabilities are not calibrated. The published grid used mixed yield units in ERP. The corrected fit evaluates the selected configuration on the same dates, with the original grid ranking drawn from the historical definition. Choosing the horizon after reviewing several targets is still retrospective; a new untouched period is needed before treating this as a confirmed investment strategy.
+**Remaining limitations.** The panel combines archived and revised macroeconomic values, so it is not fully point-in-time. The 34 negative months and most of the strategy's advantage come from one episode (2005–2008). Oversampled probabilities are uncalibrated. The horizon was chosen retrospectively. The strategy still needs evaluation on an untouched period.
 
 **Strategy follow-up.** The later [classification/regression strategy study](docs/experiments/signal-strategies/results.md) does not support replacing this research reference with regression, or replacing DCA with a validated trading system. The best development-selected regression policy underperformed DCA in evaluation; the largest regression evaluation ROI came from a retrospectively chosen policy with just two alerts.
-
-The model metadata and verification reports identify the inputs and results for each fit. [Corrected model](models/artifacts/selected_lightgbm_erp_corrected/model/metadata.json) · [Historical results](models/artifacts/selected_lightgbm/verification.json) · [Full historical grid](docs/experiments/multihorizon-grid/results.md) · [Methodology](docs/experiments/multihorizon-grid/methodology.md)
 
 ### Explainable AI (XAI) via Tree SHAP
 
@@ -297,11 +295,11 @@ The curves mark shares and uninvested cash to market through 2 January 2026. ROI
 
 ![LightGBM and DCA cumulative ROI with equal contributions](docs/images/selected_lightgbm/investment_strategies.png)
 
-*LightGBM with corrected ERP ends at 345.28% ROI versus 332.01% for DCA, a difference of 13.27 percentage points.* [Daily portfolio history](docs/images/selected_lightgbm/roi_history.csv)
+*LightGBM ends at 345.28% ROI versus 332.01% for DCA, a difference of 13.27 percentage points.* [Daily portfolio history](docs/images/selected_lightgbm/roi_history.csv)
 
 ### Classification versus regression: alternative strategies
 
-This historical follow-up uses the original ERP formula and the same 36-month target. It compares two LightGBM classifiers and 24 regressors (L1/L2 losses, with/without negative-return oversampling), two alert rules and 13 policies: delayed/partial purchases, waiting for a favorable signal, holding cash and rebalancing the entire portfolio. Including DCA, the table contains **677 comparisons**. Selection uses development signals from 1982–1999, valued by the end of 2004; evaluation signals remain 2005–2020, valued on 2 January 2026.
+This follow-up uses the original study's feature definitions and 36-month target. It compares two LightGBM classifiers and 24 regressors (L1/L2 losses, with/without negative-return oversampling), two alert rules and 13 policies: delayed/partial purchases, waiting for a favorable signal, holding cash and rebalancing the entire portfolio. Including DCA, the table contains **677 comparisons**. Selection uses development signals from 1982–1999, valued by the end of 2004; evaluation signals remain 2005–2020, valued on 2 January 2026.
 
 | Policy | Development advantage vs DCA | Evaluation ROI | Evaluation advantage vs DCA |
 | --- | ---: | ---: | ---: |
@@ -482,13 +480,10 @@ pip install -r requirements.txt
 #### Reproduce and load the selected reference model
 
 ```bash
-# Evaluate the selected configuration and refit it with corrected ERP units
 python -m scripts.train_selected_model
-# Reproduce the historical model and its published out-of-sample scores
-python -m scripts.train_selected_model --historical-erp
 ```
 
-Both commands use the bundled archived-feature snapshot and the study's hybrid panel. The corrected model and its annual walk-forward results are written to `models/artifacts/selected_lightgbm_erp_corrected/`. The historical command writes its reproduction to `models/artifacts/selected_lightgbm/`. The native models are refitted on all labeled months from 1962–2020, and the separate walk-forward predictions support the reported test metrics. The model metadata records the ERP formula to use when preparing prediction inputs.
+The command uses the bundled archived-feature snapshot and the study's hybrid panel. It writes the refitted model (1962–2020) and the walk-forward predictions used for the test metrics to `models/artifacts/selected_lightgbm_erp_corrected/`. [Model metadata](models/artifacts/selected_lightgbm_erp_corrected/model/metadata.json) · [Reproducing the historical experiment](models/README.md)
 
 ```python
 import json
